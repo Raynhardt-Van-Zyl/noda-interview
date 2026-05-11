@@ -29,8 +29,8 @@ pub fn read_csv_records(
     let mut count = 0;
 
     for record in reader.deserialize() {
-        let record: RawRecord = record
-            .with_context(|| format!("failed to parse CSV record in {}", path.display()))?;
+        let record: RawRecord =
+            record.with_context(|| format!("failed to parse CSV record in {}", path.display()))?;
         handle_record(record)?;
         count += 1;
     }
@@ -49,9 +49,8 @@ pub fn read_ndjson_records(
     let mut count = 0;
 
     for line in reader.lines() {
-        let line = line.with_context(|| {
-            format!("failed to read NDJSON input line in {}", path.display())
-        })?;
+        let line = line
+            .with_context(|| format!("failed to read NDJSON input line in {}", path.display()))?;
         let record: RawRecord = serde_json::from_str(&line)
             .with_context(|| format!("failed to parse NDJSON record in {}", path.display()))?;
         handle_record(record)?;
