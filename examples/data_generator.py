@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
 """Generate CSV and NDJSON sample data for ETL testing.
-
-Default output is valid CSV plus standards-compliant NDJSON with the schema:
-id:string, timestamp:string(ISO-8601), value:float, tag:string.
-
-Use --dirty to add rows that keep the same field names but intentionally stress
-schema validation. Use --nonstandard-json-floats with --dirty if you also want
-NDJSON rows containing NaN/Infinity tokens, which are accepted by Python's JSON
-encoder but rejected by strict JSON parsers such as serde_json.
 """
 
 from __future__ import annotations
@@ -23,9 +15,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-
 FIELDNAMES = ("id", "timestamp", "value", "tag")
 
+# made up random tags, but also added some weird stuff like unicode and emoji -_'
 TAGS = (
     "alpha",
     "beta",
@@ -62,7 +54,8 @@ FINITE_EDGE_VALUES = (
 
 NONSTANDARD_FLOATS = (math.nan, math.inf, -math.inf)
 
-
+# just made some fancy python cli parameters for the script, but probably pointless as
+# this will only be used once to generate all the data
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate randomized ETL fixture data in CSV and NDJSON formats."
@@ -93,7 +86,7 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-
+#overkill of a random id generator, used a bit of AI for this beast of point bloat 
 def random_id(rng: random.Random) -> str:
     style = rng.choice(("uuid", "short", "numeric", "prefixed", "edge_chars"))
     if style == "uuid":
@@ -106,7 +99,7 @@ def random_id(rng: random.Random) -> str:
         return f"event-{rng.randint(1, 999_999):06d}"
     return rng.choice((" id-with-spaces ", "id,comma", 'id"quote', "id/slash", "id:colon"))
 
-
+#ISO-8601 is not very standard IMO 
 def random_timestamp(rng: random.Random, base: datetime) -> str:
     offset_seconds = rng.randint(-365 * 24 * 3600, 365 * 24 * 3600)
     microseconds = rng.choice((0, rng.randint(1, 999_999)))
@@ -131,6 +124,7 @@ def random_timestamp(rng: random.Random, base: datetime) -> str:
     return boundary.isoformat().replace("+00:00", "Z")
 
 
+# added more variants to make the random value more extreme sometimes 
 def random_value(rng: random.Random) -> float:
     variant = rng.choice(("normal", "edge", "scientific", "rounded"))
     if variant == "edge":
@@ -141,7 +135,7 @@ def random_value(rng: random.Random) -> float:
         return round(rng.uniform(-1_000_000, 1_000_000), rng.randint(0, 6))
     return rng.uniform(-10_000, 10_000)
 
-
+# generation of the actual row  
 def random_row(rng: random.Random, base: datetime) -> dict[str, Any]:
     return {
         "id": random_id(rng),
@@ -172,7 +166,7 @@ def edge_rows(include_nonstandard_floats: bool) -> list[dict[str, Any]]:
         )
     return rows
 
-
+# Writing to the actual csv file
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -180,7 +174,7 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writeheader()
         writer.writerows(rows)
 
-
+# Individual dumps are quite slow here, will see if there isnt anything better for this 
 def write_ndjson(path: Path, rows: list[dict[str, Any]], allow_nan: bool) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
@@ -198,6 +192,7 @@ def write_ndjson(path: Path, rows: list[dict[str, Any]], allow_nan: bool) -> Non
 
 def main() -> None:
     args = parse_args()
+    # boundary checks 
     if args.rows < 0:
         raise SystemExit("--rows must be >= 0")
     if args.nonstandard_json_floats and not args.dirty:
