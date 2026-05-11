@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import itertools
 import json
 import math
 import random
@@ -13,7 +14,7 @@ import string
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 FIELDNAMES = ("id", "timestamp", "value", "tag")
 
@@ -166,20 +167,30 @@ def edge_rows(include_nonstandard_floats: bool) -> list[dict[str, Any]]:
         )
     return rows
 
-# Writing to the actual csv file
-def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        writer.writerows(rows)
+def generated_rows(rng: random.Random, base: datetime, count: int) -> Iterable[dict[str, Any]]:
+    for _ in range(count):
+        yield random_row(rng, base)
 
-# Individual dumps are quite slow here, will see if there isnt anything better for this 
-def write_ndjson(path: Path, rows: list[dict[str, Any]], allow_nan: bool) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
+
+def write_outputs(
+    csv_path: Path,
+    ndjson_path: Path,
+    rows: Iterable[dict[str, Any]],
+    allow_nan: bool,
+) -> int:
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    ndjson_path.parent.mkdir(parents=True, exist_ok=True)
+    count = 0
+
+    with csv_path.open("w", newline="", encoding="utf-8") as csv_handle, ndjson_path.open(
+        "w", encoding="utf-8"
+    ) as ndjson_handle:
+        csv_writer = csv.DictWriter(csv_handle, fieldnames=FIELDNAMES)
+        csv_writer.writeheader()
+
         for row in rows:
-            handle.write(
+            csv_writer.writerow(row)
+            ndjson_handle.write(
                 json.dumps(
                     row,
                     ensure_ascii=False,
@@ -187,7 +198,10 @@ def write_ndjson(path: Path, rows: list[dict[str, Any]], allow_nan: bool) -> Non
                     separators=(",", ":"),
                 )
             )
-            handle.write("\n")
+            ndjson_handle.write("\n")
+            count += 1
+
+    return count
 
 
 def main() -> None:
@@ -206,14 +220,18 @@ def main() -> None:
         base = base.replace(tzinfo=timezone.utc)
 
     rng = random.Random(args.seed)
-    rows = [random_row(rng, base) for _ in range(args.rows)]
+    rows: Iterable[dict[str, Any]] = generated_rows(rng, base, args.rows)
     if args.dirty:
-        rows = edge_rows(args.nonstandard_json_floats) + rows
+        rows = itertools.chain(edge_rows(args.nonstandard_json_floats), rows)
 
-    write_csv(args.csv, rows)
-    write_ndjson(args.ndjson, rows, allow_nan=args.nonstandard_json_floats)
+    count = write_outputs(
+        args.csv,
+        args.ndjson,
+        rows,
+        allow_nan=args.nonstandard_json_floats,
+    )
 
-    print(f"wrote {len(rows)} rows to {args.csv} and {args.ndjson}")
+    print(f"wrote {count} rows to {args.csv} and {args.ndjson}")
 
 
 if __name__ == "__main__":
