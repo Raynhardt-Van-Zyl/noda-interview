@@ -11,7 +11,7 @@ use crate::{cli::InputFormat, model::RawRecord};
 pub fn read_records(
     path: impl AsRef<Path>,
     format: InputFormat,
-    mut handle_record: impl FnMut(RawRecord) -> Result<()>,
+    handle_record: impl FnMut(RawRecord) -> Result<()>,
 ) -> Result<usize> {
     match format {
         InputFormat::Csv => read_csv_records(path, handle_record),
