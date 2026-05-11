@@ -16,4 +16,10 @@ pub struct Args {
 
     #[arg(long, value_enum)]
     pub format: InputFormat,
+
+    #[arg(long)]
+    pub db: PathBuf,
+
+    #[arg(long, default_value_t = 1000)]
+    pub batch_size: usize,
 }
