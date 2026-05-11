@@ -5,9 +5,9 @@ clean rows into an existing SQLite `metrics` table.
 
 ## Current Status
 
-Structural setup only. Implementation is intentionally not written yet.
+Implemented streaming ETL flow for CSV and NDJSON inputs.
 
-## Planned CLI
+## CLI
 
 ```bash
 cargo run -- \
@@ -17,7 +17,7 @@ cargo run -- \
   --batch-size 1000
 ```
 
-## Planned Flags
+## Flags
 
 ```text
 --input <path>
@@ -38,7 +38,7 @@ CREATE TABLE metrics (
 );
 ```
 
-## Planned Project Layout
+## Project Layout
 
 ```text
 src/
@@ -68,7 +68,7 @@ positive = 1 when value > 0.0, otherwise 0
 NaN or infinite values -> failed row
 ```
 
-## Planned Metrics
+## Metrics
 
 ```text
 Total records processed:
@@ -79,11 +79,12 @@ Total duration:
 Rows per second:
 ```
 
-## Assumptions To Confirm In Implementation
+## Implementation Decisions
 
 ```text
 Input files are streamed and never collected into a Vec.
 Duplicate primary keys are counted as failed rows.
 Rows per second is calculated from total processed rows.
 Filtered rows are reported separately from failed rows.
+The SQLite database and `metrics` table must already exist before running the CLI.
 ```
