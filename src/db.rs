@@ -1,7 +1,13 @@
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use crate::model::CleanRecord;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BatchInsertResult {
+    pub inserted: usize,
+    pub failed: usize,
+}
 
 pub fn open_connection(path: impl AsRef<std::path::Path>) -> Result<Connection> {
     let path = path.as_ref();
@@ -9,11 +15,14 @@ pub fn open_connection(path: impl AsRef<std::path::Path>) -> Result<Connection> 
         .with_context(|| format!("failed to open SQLite database {}", path.display()))
 }
 
-pub fn insert_batch(connection: &mut Connection, records: &[CleanRecord]) -> Result<usize> {
+pub fn insert_batch(
+    connection: &mut Connection,
+    records: &[CleanRecord],
+) -> Result<BatchInsertResult> {
     let transaction = connection
         .transaction()
         .context("failed to start SQLite transaction")?;
-    let inserted = {
+    let result = {
         let mut statement = transaction
             .prepare(
                 "INSERT INTO metrics (id, timestamp, value, tag, positive)
@@ -21,28 +30,29 @@ pub fn insert_batch(connection: &mut Connection, records: &[CleanRecord]) -> Res
             )
             .context("failed to prepare metrics insert")?;
         let mut inserted = 0;
+        let mut failed = 0;
 
         for record in records {
-            statement
-                .execute(params![
-                    record.id,
-                    record.timestamp,
-                    record.value,
-                    record.tag,
-                    i64::from(record.positive),
-                ])
-                .with_context(|| format!("failed to insert metrics row {}", record.id))?;
-            inserted += 1;
+            match statement.execute(params![
+                record.id,
+                record.timestamp,
+                record.value,
+                record.tag,
+                i64::from(record.positive),
+            ]) {
+                Ok(_) => inserted += 1,
+                Err(_) => failed += 1,
+            }
         }
 
-        inserted
+        BatchInsertResult { inserted, failed }
     };
 
     transaction
         .commit()
         .context("failed to commit SQLite transaction")?;
 
-    Ok(inserted)
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -76,12 +86,61 @@ mod tests {
             positive: true,
         }];
 
-        let inserted = insert_batch(&mut connection, &records).unwrap();
+        let result = insert_batch(&mut connection, &records).unwrap();
         let count: i64 = connection
             .query_row("SELECT COUNT(*) FROM metrics", [], |row| row.get(0))
             .unwrap();
 
-        assert_eq!(inserted, 1);
+        assert_eq!(
+            result,
+            BatchInsertResult {
+                inserted: 1,
+                failed: 0
+            }
+        );
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn keeps_inserting_after_duplicate_ids() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        create_metrics_table(&connection);
+        let records = vec![
+            CleanRecord {
+                id: "event-1".to_string(),
+                timestamp: 1_778_502_600,
+                value: 42.5,
+                tag: "prod".to_string(),
+                positive: true,
+            },
+            CleanRecord {
+                id: "event-1".to_string(),
+                timestamp: 1_778_502_601,
+                value: -1.0,
+                tag: "prod".to_string(),
+                positive: false,
+            },
+            CleanRecord {
+                id: "event-2".to_string(),
+                timestamp: 1_778_502_602,
+                value: -1.0,
+                tag: "prod".to_string(),
+                positive: false,
+            },
+        ];
+
+        let result = insert_batch(&mut connection, &records).unwrap();
+        let count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM metrics", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(
+            result,
+            BatchInsertResult {
+                inserted: 2,
+                failed: 1
+            }
+        );
+        assert_eq!(count, 2);
     }
 }
