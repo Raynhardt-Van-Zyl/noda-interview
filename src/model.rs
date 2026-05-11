@@ -7,3 +7,12 @@ pub struct RawRecord {
     pub value: f64,
     pub tag: String,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CleanRecord {
+    pub id: String,
+    pub timestamp: i64,
+    pub value: f64,
+    pub tag: String,
+    pub positive: bool,
+}
