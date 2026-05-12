@@ -2,6 +2,7 @@
 name = "noda-interview"
 version = "0.1.0"
 edition = "2024"
+authors = ["Raynhardt van Zyl"]
 
 [dependencies]
 anyhow = "1"

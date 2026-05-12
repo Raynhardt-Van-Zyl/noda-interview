@@ -1,3 +1,7 @@
+//! Streaming CSV/NDJSON to SQLite ETL.
+//!
+//! Author: Raynhardt van Zyl
+
 mod cli;
 mod db;
 mod input;
