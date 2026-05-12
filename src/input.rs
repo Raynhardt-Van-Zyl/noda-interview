@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 
 use crate::{cli::InputFormat, model::RawRecord};
 
+/// Stream records from the selected input format into the provided handler.
 pub fn read_records(
     path: impl AsRef<Path>,
     format: InputFormat,
@@ -19,6 +20,7 @@ pub fn read_records(
     }
 }
 
+/// Read CSV records with serde deserialization, one record at a time.
 pub fn read_csv_records(
     path: impl AsRef<Path>,
     mut handle_record: impl FnMut(RawRecord) -> Result<()>,
@@ -38,6 +40,7 @@ pub fn read_csv_records(
     Ok(count)
 }
 
+/// Read newline-delimited JSON records, one line at a time.
 pub fn read_ndjson_records(
     path: impl AsRef<Path>,
     mut handle_record: impl FnMut(RawRecord) -> Result<()>,

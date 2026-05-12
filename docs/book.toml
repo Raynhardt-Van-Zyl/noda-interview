@@ -1,0 +1,10 @@
+[book]
+title = "Noda Interview ETL"
+authors = ["Raynhardt van Zyl"]
+description = "A streaming Rust ETL pipeline for CSV, NDJSON, and SQLite."
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://gitlab.van-zyl.cc/raynhardt/noda-interview"
+edit-url-template = "https://gitlab.van-zyl.cc/raynhardt/noda-interview/-/edit/main/docs/{path}"

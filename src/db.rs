@@ -3,18 +3,24 @@ use rusqlite::{Connection, params};
 
 use crate::model::CleanRecord;
 
+/// Insert outcome for one batch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BatchInsertResult {
     pub inserted: usize,
     pub failed: usize,
 }
 
+/// Open the existing SQLite database used by the CLI run.
 pub fn open_connection(path: impl AsRef<std::path::Path>) -> Result<Connection> {
     let path = path.as_ref();
     Connection::open(path)
         .with_context(|| format!("failed to open SQLite database {}", path.display()))
 }
 
+/// Insert one batch in a transaction.
+///
+/// The baseline treats row-level SQLite errors, including duplicate primary
+/// keys, as failed rows and continues with the rest of the batch.
 pub fn insert_batch(
     connection: &mut Connection,
     records: &[CleanRecord],

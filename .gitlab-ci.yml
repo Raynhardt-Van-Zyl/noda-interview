@@ -1,0 +1,73 @@
+image: rust:1.95-bookworm
+
+stages:
+  - verify
+  - docs
+  - performance
+
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+
+cache:
+  key:
+    files:
+      - Cargo.lock
+  paths:
+    - .cargo/registry/
+    - .cargo/git/
+    - target/
+
+.default_rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+    - when: never
+
+.rust_setup:
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends ca-certificates python3 sqlite3
+    - rustc --version
+    - cargo --version
+
+verify:
+  stage: verify
+  extends:
+    - .default_rules
+    - .rust_setup
+  script:
+    - cargo fmt --check
+    - cargo clippy --all-targets -- -D warnings
+    - cargo test
+    - cargo build --release
+    - cargo doc --no-deps
+
+docs:
+  stage: docs
+  extends:
+    - .default_rules
+    - .rust_setup
+  script:
+    - test -x "$CARGO_HOME/bin/mdbook" || cargo install mdbook --version 0.5.2 --locked
+    - "$CARGO_HOME/bin/mdbook" build docs
+    - "$CARGO_HOME/bin/mdbook" test docs
+  artifacts:
+    when: always
+    paths:
+      - docs/book/
+    expire_in: 1 week
+
+performance:
+  stage: performance
+  extends:
+    - .default_rules
+    - .rust_setup
+  script:
+    - scripts/ci_performance.sh
+  artifacts:
+    when: always
+    paths:
+      - target/ci-performance/
+    expire_in: 1 week

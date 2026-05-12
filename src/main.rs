@@ -28,6 +28,8 @@ fn main() -> Result<()> {
     let mut metrics = RunMetrics::start();
     let mut batch = Vec::with_capacity(args.batch_size);
 
+    // Keep the baseline orchestration simple: transform one streamed record,
+    // append clean rows to an in-memory batch, and flush when the batch is full.
     read_records(&args.input, args.format, |record| {
         metrics.total_records += 1;
 
@@ -66,6 +68,7 @@ fn flush_batch(
         return Ok(());
     }
 
+    // Each baseline flush owns its SQLite transaction and prepared statement.
     let result = insert_batch(connection, batch)?;
     metrics.successful_rows += result.inserted;
     metrics.failed_rows += result.failed;

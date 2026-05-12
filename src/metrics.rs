@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+/// Runtime counters collected during one CLI run.
 #[derive(Debug)]
 pub struct RunMetrics {
     started_at: Instant,
@@ -10,6 +11,7 @@ pub struct RunMetrics {
 }
 
 impl RunMetrics {
+    /// Start a new metrics timer with zeroed counters.
     pub fn start() -> Self {
         Self {
             started_at: Instant::now(),
@@ -20,10 +22,12 @@ impl RunMetrics {
         }
     }
 
+    /// Wall-clock time since the run started.
     pub fn elapsed(&self) -> Duration {
         self.started_at.elapsed()
     }
 
+    /// Throughput based on all raw records read from input.
     pub fn rows_per_second(&self) -> f64 {
         let seconds = self.elapsed().as_secs_f64();
         if seconds == 0.0 {
@@ -33,6 +37,7 @@ impl RunMetrics {
         self.total_records as f64 / seconds
     }
 
+    /// Human-readable summary printed by the CLI.
     pub fn summary(&self) -> String {
         format!(
             "Total records processed: {}\nSuccessful rows written: {}\nFailed rows: {}\nFiltered empty tags: {}\nTotal duration: {:.3}s\nRows per second: {:.2}",

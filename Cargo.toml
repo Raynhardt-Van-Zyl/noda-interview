@@ -16,3 +16,7 @@ rusqlite = { version = "0.39", features = ["bundled"] }
 assert_cmd = "2"
 tempfile = "3"
 predicates = "3"
+
+[profile.profiling]
+inherits = "release"
+debug = "line-tables-only"

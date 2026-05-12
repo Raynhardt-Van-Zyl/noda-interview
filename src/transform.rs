@@ -3,12 +3,14 @@ use chrono::DateTime;
 
 use crate::model::{CleanRecord, RawRecord};
 
+/// Result of applying validation and normalization to one raw record.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TransformResult {
     Clean(CleanRecord),
     FilteredEmptyTag,
 }
 
+/// Validate and normalize one raw input record.
 pub fn transform_record(record: RawRecord) -> Result<TransformResult> {
     if !record.value.is_finite() {
         bail!("value must be finite for id {}", record.id);
