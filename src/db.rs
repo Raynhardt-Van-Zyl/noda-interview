@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use rusqlite::{Connection, Statement, params};
+use rusqlite::{Connection, Statement};
 
 use crate::model::CleanRecord;
 
@@ -18,8 +18,20 @@ pub struct RunInserter<'tx> {
 /// Open the existing SQLite database used by the CLI run.
 pub fn open_connection(path: impl AsRef<std::path::Path>) -> Result<Connection> {
     let path = path.as_ref();
-    Connection::open(path)
-        .with_context(|| format!("failed to open SQLite database {}", path.display()))
+    let connection = Connection::open(path)
+        .with_context(|| format!("failed to open SQLite database {}", path.display()))?;
+    configure_bulk_load_connection(&connection)?;
+    Ok(connection)
+}
+
+fn configure_bulk_load_connection(connection: &Connection) -> Result<()> {
+    // The default SQLite page cache spills dirty pages during this bulk insert
+    // workload. A 16 MiB cache sharply reduces pager stress without making
+    // memory use disproportionate for the million-row fixture.
+    connection
+        .pragma_update(None, "cache_size", -16_384)
+        .context("failed to configure SQLite cache size")?;
+    Ok(())
 }
 
 /// Run insert work inside one transaction with one prepared statement.
@@ -34,7 +46,8 @@ pub fn with_run_inserter<R>(
         let statement = transaction
             .prepare(
                 "INSERT INTO metrics (id, timestamp, value, tag, positive)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(id) DO NOTHING",
             )
             .context("failed to prepare metrics insert")?;
         let mut inserter = RunInserter { statement };
@@ -51,21 +64,23 @@ pub fn with_run_inserter<R>(
 impl RunInserter<'_> {
     /// Insert one bounded batch.
     ///
-    /// Row-level SQLite errors, including duplicate primary keys, count as
-    /// failed rows and insertion continues with the rest of the batch.
+    /// Duplicate primary keys count as failed rows without taking SQLite's
+    /// error path. Other row-level SQLite errors are also counted as failures
+    /// and insertion continues with the rest of the batch.
     pub fn insert_batch(&mut self, records: &[CleanRecord]) -> BatchInsertResult {
         let mut inserted = 0;
         let mut failed = 0;
 
         for record in records {
-            match self.statement.execute(params![
-                record.id,
+            match self.statement.execute((
+                record.id.as_str(),
                 record.timestamp,
                 record.value,
-                record.tag,
+                record.tag.as_str(),
                 i64::from(record.positive),
-            ]) {
-                Ok(_) => inserted += 1,
+            )) {
+                Ok(1) => inserted += 1,
+                Ok(_) => failed += 1,
                 Err(_) => failed += 1,
             }
         }
