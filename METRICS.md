@@ -1,25 +1,28 @@
 # Metrics
 
-This file tracks baseline performance against the active optimization branches.
-All values below were measured on Raynhardt's Arch Linux workstation.
+This file tracks the baseline implementation against the active optimization
+branches. All values below were measured on Raynhardt's Arch Linux workstation.
 
 ## Benchmark Method
 
 ```text
 Date: 2026-05-12
-Fixture:
-  examples/sample.csv: 65 MiB, 1,000,011 logical records
-  examples/sample.ndjson: 101 MiB, 1,000,011 records
+Fixtures:
+  Generated with examples/data_generator.py --dirty
+  Scales: 10k, 100k, 1M, 10M input rows
 Build:
   cargo build --release
 Run:
   target/release/noda-interview --batch-size 1000
 Database:
-  fresh temporary SQLite database per format/run
+  fresh SQLite database per branch, format, and scale
+  database file removed after every individual test
 Peak RSS:
   sampled from /proc/<pid>/status VmHWM while the process ran
 Binary size:
   stat -c %s target/release/noda-interview
+Raw results:
+  target/scale-bench-10k-10m-full/results.tsv
 ```
 
 The CLI reports rows per second from total processed input records. Filtered
@@ -28,69 +31,144 @@ business filter, not a parsing or write failure.
 
 ## Measured Branch Revisions
 
-| Branch | Commit | Purpose |
-| --- | --- | --- |
-| `main` | `87c597a` | Clean baseline. |
-| `perf/single-transaction` | `02872de` | Use one transaction, avoid duplicate insert errors, and raise SQLite page cache for bulk loading. |
-| `perf/csv-byterecord` | `44922ed` | Parse CSV with reusable `csv::ByteRecord` instead of serde row deserialization. |
-| `perf/ndjson-buffer` | `4a74fbd` | Reuse one buffer while reading NDJSON lines. |
-| `perf/combined` | `badf843` | Combines the single-transaction, CSV `ByteRecord`, and NDJSON buffer optimizations. |
+| Label | Branch | Commit | Purpose |
+| --- | --- | --- | --- |
+| `base` | `main` | `6b7099e` | Clean baseline plus current docs and benchmark setup. |
+| `tx` | `perf/single-transaction` | `02872de` | Use one transaction, avoid duplicate insert errors, and raise SQLite page cache for bulk loading. |
+| `csv` | `perf/csv-byterecord` | `44922ed` | Parse CSV with reusable `csv::ByteRecord` instead of serde row deserialization. |
+| `ndj` | `perf/ndjson-buffer` | `4a74fbd` | Reuse one buffer while reading NDJSON lines. |
+| `all` | `perf/combined` | `badf843` | Combines the earlier transaction, CSV `ByteRecord`, and NDJSON buffer optimizations. |
 
 ## Outcome Counts
 
-All measured branches produced the same row outcomes for both CSV and NDJSON.
+All measured branches produced the same row outcomes for both CSV and NDJSON at
+each scale.
 
-| Metric | Value |
+| Scale | Total records | Successful rows | Failed rows | Filtered empty tags |
+| ---: | ---: | ---: | ---: | ---: |
+| 10,000 | 10,011 | 7,404 | 1,965 | 642 |
+| 100,000 | 100,011 | 72,532 | 20,906 | 6,573 |
+| 1,000,000 | 1,000,011 | 685,619 | 247,928 | 66,464 |
+| 10,000,000 | 10,000,011 | 5,075,233 | 4,259,194 | 665,584 |
+
+## Scaling Summary
+
+Rows/sec, duration, and max RSS are averaged across CSV and NDJSON for the same
+branch and scale. Binary size is constant per branch for the release build.
+
+### Average Throughput
+
+| Scale | `base` | `tx` | `csv` | `ndj` | `all` |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 10,000 | 108,814 | 448,401 | 110,094 | 105,992 | 450,932 |
+| 100,000 | 55,979 | 684,148 | 56,307 | 58,108 | 500,489 |
+| 1,000,000 | 25,514 | 423,214 | 25,011 | 25,101 | 119,496 |
+| 10,000,000 | 21,903 | 129,929 | 20,074 | 19,245 | 100,644 |
+
+### Average Duration
+
+| Scale | `base` | `tx` | `csv` | `ndj` | `all` |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 10,000 | 0.092s | 0.022s | 0.091s | 0.095s | 0.022s |
+| 100,000 | 1.786s | 0.147s | 1.776s | 1.721s | 0.200s |
+| 1,000,000 | 39.197s | 2.366s | 39.983s | 39.840s | 8.369s |
+| 10,000,000 | 461.781s | 76.972s | 498.610s | 519.623s | 99.363s |
+
+### Max RSS
+
+| Scale | `base` | `tx` | `csv` | `ndj` | `all` |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 10,000 | 6,008 KiB | 5,944 KiB | 6,036 KiB | 6,000 KiB | 6,032 KiB |
+| 100,000 | 7,612 KiB | 11,704 KiB | 7,608 KiB | 7,644 KiB | 7,632 KiB |
+| 1,000,000 | 7,608 KiB | 24,020 KiB | 7,752 KiB | 7,648 KiB | 7,540 KiB |
+| 10,000,000 | 7,660 KiB | 24,032 KiB | 7,684 KiB | 7,592 KiB | 7,636 KiB |
+
+### Speedup Vs Baseline
+
+| Scale | `tx` | `csv` | `ndj` | `all` |
+| ---: | ---: | ---: | ---: | ---: |
+| 10,000 | 4.12x | 1.01x | 0.97x | 4.14x |
+| 100,000 | 12.22x | 1.01x | 1.04x | 8.94x |
+| 1,000,000 | 16.59x | 0.98x | 0.98x | 4.68x |
+| 10,000,000 | 5.93x | 0.92x | 0.88x | 4.60x |
+
+### Binary Size
+
+| Branch | Release binary |
 | --- | ---: |
-| Total records processed | 1,000,011 |
-| Successful rows written | 685,619 |
-| Failed rows | 247,928 |
-| Filtered empty tags | 66,464 |
-
-## Summary
-
-| Branch | Avg rows/sec | Delta vs base | Avg duration | Avg max RSS | RSS delta | Binary size | Size delta |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `main` | 211,112 | baseline | 4.737s | 7,628 KiB | baseline | 3,639,496 bytes | baseline |
-| `perf/single-transaction` | 744,931 | +533,819 (+252.86%) | 1.344s | 24,196 KiB | +16,568 KiB (+217.20%) | 3,653,024 bytes | +13,528 bytes (+0.37%) |
-| `perf/csv-byterecord` | 218,103 | +6,991 (+3.31%) | 4.585s | 7,640 KiB | +12 KiB (+0.16%) | 3,655,808 bytes | +16,312 bytes (+0.45%) |
-| `perf/ndjson-buffer` | 217,979 | +6,867 (+3.25%) | 4.591s | 7,614 KiB | -14 KiB (-0.18%) | 3,638,160 bytes | -1,336 bytes (-0.04%) |
-| `perf/combined` | 420,240 | +209,128 (+99.06%) | 2.380s | 7,668 KiB | +40 KiB (+0.52%) | 3,656,168 bytes | +16,672 bytes (+0.46%) |
-
-Chart labels:
-
-```text
-base = main
-tx   = perf/single-transaction
-csv  = perf/csv-byterecord
-ndj  = perf/ndjson-buffer
-all  = perf/combined
-```
+| `base` | 3,639,496 bytes |
+| `tx` | 3,653,024 bytes |
+| `csv` | 3,655,808 bytes |
+| `ndj` | 3,638,160 bytes |
+| `all` | 3,656,168 bytes |
 
 ## Graphs
 
+All graph axes start at zero and use absolute values. Baseline is shown as its
+own graph so the reference behavior stays visible.
+
 ```mermaid
 xychart-beta
-    title "Average Throughput"
-    x-axis ["base", "tx", "csv", "ndj", "all"]
-    y-axis "rows/sec" 0 --> 800000
-    bar [211112, 744931, 218103, 217979, 420240]
+    title "Throughput Scaling - base"
+    x-axis ["10k", "100k", "1M", "10M"]
+    y-axis "rows/sec" 0 --> 700000
+    line [108814, 55979, 25514, 21903]
 ```
 
 ```mermaid
 xychart-beta
-    title "Average Duration"
-    x-axis ["base", "tx", "csv", "ndj", "all"]
-    y-axis "seconds" 0 --> 5
-    bar [4.737, 1.344, 4.585, 4.591, 2.380]
+    title "Throughput Scaling - tx"
+    x-axis ["10k", "100k", "1M", "10M"]
+    y-axis "rows/sec" 0 --> 700000
+    line [448401, 684148, 423214, 129929]
 ```
 
 ```mermaid
 xychart-beta
-    title "Average Max RSS"
+    title "Throughput Scaling - csv"
+    x-axis ["10k", "100k", "1M", "10M"]
+    y-axis "rows/sec" 0 --> 700000
+    line [110094, 56307, 25011, 20074]
+```
+
+```mermaid
+xychart-beta
+    title "Throughput Scaling - ndj"
+    x-axis ["10k", "100k", "1M", "10M"]
+    y-axis "rows/sec" 0 --> 700000
+    line [105992, 58108, 25101, 19245]
+```
+
+```mermaid
+xychart-beta
+    title "Throughput Scaling - all"
+    x-axis ["10k", "100k", "1M", "10M"]
+    y-axis "rows/sec" 0 --> 700000
+    line [450932, 500489, 119496, 100644]
+```
+
+```mermaid
+xychart-beta
+    title "10M Throughput Comparison"
+    x-axis ["base", "tx", "csv", "ndj", "all"]
+    y-axis "rows/sec" 0 --> 140000
+    bar [21903, 129929, 20074, 19245, 100644]
+```
+
+```mermaid
+xychart-beta
+    title "10M Duration Comparison"
+    x-axis ["base", "tx", "csv", "ndj", "all"]
+    y-axis "seconds" 0 --> 550
+    bar [461.781, 76.972, 498.610, 519.623, 99.363]
+```
+
+```mermaid
+xychart-beta
+    title "10M Max RSS Comparison"
     x-axis ["base", "tx", "csv", "ndj", "all"]
     y-axis "KiB" 0 --> 25000
-    bar [7628, 24196, 7640, 7614, 7668]
+    bar [7660, 24032, 7684, 7592, 7636]
 ```
 
 ```mermaid
@@ -101,57 +179,15 @@ xychart-beta
     bar [3639496, 3653024, 3655808, 3638160, 3656168]
 ```
 
-```mermaid
-xychart-beta
-    title "CSV Throughput"
-    x-axis ["base", "tx", "csv", "ndj", "all"]
-    y-axis "rows/sec" 0 --> 800000
-    bar [211363, 771913, 217488, 224214, 424163]
-```
-
-```mermaid
-xychart-beta
-    title "NDJSON Throughput"
-    x-axis ["base", "tx", "csv", "ndj", "all"]
-    y-axis "rows/sec" 0 --> 800000
-    bar [210861, 717949, 218718, 211743, 416316]
-```
-
-## Per-Format Speed
-
-| Branch | Format | Duration | Rows/sec | Delta vs same-format base |
-| --- | --- | ---: | ---: | ---: |
-| `main` | CSV | 4.731s | 211,362.89 | baseline |
-| `main` | NDJSON | 4.743s | 210,861.03 | baseline |
-| `perf/single-transaction` | CSV | 1.295s | 771,913.25 | +560,550 (+265.21%) |
-| `perf/single-transaction` | NDJSON | 1.393s | 717,948.86 | +507,088 (+240.48%) |
-| `perf/csv-byterecord` | CSV | 4.598s | 217,488.01 | +6,125 (+2.90%) |
-| `perf/csv-byterecord` | NDJSON | 4.572s | 218,717.91 | +7,857 (+3.73%) |
-| `perf/ndjson-buffer` | CSV | 4.460s | 224,214.30 | +12,851 (+6.08%) |
-| `perf/ndjson-buffer` | NDJSON | 4.723s | 211,742.96 | +882 (+0.42%) |
-| `perf/combined` | CSV | 2.358s | 424,163.34 | +212,800 (+100.68%) |
-| `perf/combined` | NDJSON | 2.402s | 416,315.69 | +205,455 (+97.44%) |
-
-## Memory And Binary Size
-
-| Branch | CSV max RSS | NDJSON max RSS | Release binary |
-| --- | ---: | ---: | ---: |
-| `main` | 7,636 KiB | 7,620 KiB | 3,639,496 bytes |
-| `perf/single-transaction` | 24,116 KiB | 24,276 KiB | 3,653,024 bytes |
-| `perf/csv-byterecord` | 7,668 KiB | 7,612 KiB | 3,655,808 bytes |
-| `perf/ndjson-buffer` | 7,596 KiB | 7,632 KiB | 3,638,160 bytes |
-| `perf/combined` | 7,676 KiB | 7,660 KiB | 3,656,168 bytes |
-
 ## Notes
 
-- `perf/single-transaction` is the clear high-impact speed win in this run.
-  The latest pass trades memory for speed by using a 16 MiB SQLite page cache,
-  lifting average throughput to about 745k rows/sec.
-- `perf/csv-byterecord` has only a small standalone speed gain here, despite
-  being useful in the older cumulative optimization chain.
-- `perf/ndjson-buffer` has the smallest binary and memory footprint in this
-  run, but its direct NDJSON speed improvement is small at this batch size.
-- `perf/combined` performs almost as well as `perf/single-transaction`, but the
-  added parser changes do not compound into a faster result in this measurement.
-- Memory values are low compared with older notes because this measurement uses
-  the current clean baseline and sampled process `VmHWM` directly per run.
+- `perf/single-transaction` is still the strongest standalone optimization. It
+  reaches 129,929 rows/sec at 10M rows, a 5.93x speedup over baseline.
+- `perf/single-transaction` spends memory for throughput. Its max RSS rises to
+  about 24 MiB once the larger SQLite page cache is active.
+- `perf/csv-byterecord` and `perf/ndjson-buffer` do not help at database-heavy
+  scales. At 10M rows they are both slower than baseline.
+- `perf/combined` is faster than baseline, but slower than the latest
+  `perf/single-transaction` branch at every scale above 10k rows. It should not
+  be treated as the best branch until it is rebuilt from the latest transaction
+  optimization.
