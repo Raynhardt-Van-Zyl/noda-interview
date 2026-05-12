@@ -34,6 +34,7 @@ business filter, not a parsing or write failure.
 | `perf/single-transaction` | `ff9d025` | Use one SQLite transaction and prepared statement per run. |
 | `perf/csv-byterecord` | `44922ed` | Parse CSV with reusable `csv::ByteRecord` instead of serde row deserialization. |
 | `perf/ndjson-buffer` | `4a74fbd` | Reuse one buffer while reading NDJSON lines. |
+| `perf/combined` | `badf843` | Combines the single-transaction, CSV `ByteRecord`, and NDJSON buffer optimizations. |
 
 ## Outcome Counts
 
@@ -54,6 +55,7 @@ All measured branches produced the same row outcomes for both CSV and NDJSON.
 | `perf/single-transaction` | 431,257 | +220,145 (+104.28%) | 2.319s | 7,674 KiB | +46 KiB (+0.60%) | 3,640,040 bytes | +544 bytes (+0.01%) |
 | `perf/csv-byterecord` | 218,103 | +6,991 (+3.31%) | 4.585s | 7,640 KiB | +12 KiB (+0.16%) | 3,655,808 bytes | +16,312 bytes (+0.45%) |
 | `perf/ndjson-buffer` | 217,979 | +6,867 (+3.25%) | 4.591s | 7,614 KiB | -14 KiB (-0.18%) | 3,638,160 bytes | -1,336 bytes (-0.04%) |
+| `perf/combined` | 420,240 | +209,128 (+99.06%) | 2.380s | 7,668 KiB | +40 KiB (+0.52%) | 3,656,168 bytes | +16,672 bytes (+0.46%) |
 
 Chart labels:
 
@@ -62,6 +64,7 @@ base = main
 tx   = perf/single-transaction
 csv  = perf/csv-byterecord
 ndj  = perf/ndjson-buffer
+all  = perf/combined
 ```
 
 ## Graphs
@@ -69,49 +72,49 @@ ndj  = perf/ndjson-buffer
 ```mermaid
 xychart-beta
     title "Average Throughput"
-    x-axis ["base", "tx", "csv", "ndj"]
+    x-axis ["base", "tx", "csv", "ndj", "all"]
     y-axis "rows/sec" 0 --> 450000
-    bar [211112, 431257, 218103, 217979]
+    bar [211112, 431257, 218103, 217979, 420240]
 ```
 
 ```mermaid
 xychart-beta
     title "Average Duration"
-    x-axis ["base", "tx", "csv", "ndj"]
+    x-axis ["base", "tx", "csv", "ndj", "all"]
     y-axis "seconds" 0 --> 5
-    bar [4.737, 2.319, 4.585, 4.591]
+    bar [4.737, 2.319, 4.585, 4.591, 2.380]
 ```
 
 ```mermaid
 xychart-beta
     title "Average Max RSS"
-    x-axis ["base", "tx", "csv", "ndj"]
+    x-axis ["base", "tx", "csv", "ndj", "all"]
     y-axis "KiB" 0 --> 8000
-    bar [7628, 7674, 7640, 7614]
+    bar [7628, 7674, 7640, 7614, 7668]
 ```
 
 ```mermaid
 xychart-beta
     title "Release Binary Size"
-    x-axis ["base", "tx", "csv", "ndj"]
+    x-axis ["base", "tx", "csv", "ndj", "all"]
     y-axis "bytes" 0 --> 3700000
-    bar [3639496, 3640040, 3655808, 3638160]
+    bar [3639496, 3640040, 3655808, 3638160, 3656168]
 ```
 
 ```mermaid
 xychart-beta
     title "CSV Throughput"
-    x-axis ["base", "tx", "csv", "ndj"]
+    x-axis ["base", "tx", "csv", "ndj", "all"]
     y-axis "rows/sec" 0 --> 450000
-    bar [211363, 436661, 217488, 224214]
+    bar [211363, 436661, 217488, 224214, 424163]
 ```
 
 ```mermaid
 xychart-beta
     title "NDJSON Throughput"
-    x-axis ["base", "tx", "csv", "ndj"]
+    x-axis ["base", "tx", "csv", "ndj", "all"]
     y-axis "rows/sec" 0 --> 450000
-    bar [210861, 425854, 218718, 211743]
+    bar [210861, 425854, 218718, 211743, 416316]
 ```
 
 ## Per-Format Speed
@@ -126,6 +129,8 @@ xychart-beta
 | `perf/csv-byterecord` | NDJSON | 4.572s | 218,717.91 | +7,857 (+3.73%) |
 | `perf/ndjson-buffer` | CSV | 4.460s | 224,214.30 | +12,851 (+6.08%) |
 | `perf/ndjson-buffer` | NDJSON | 4.723s | 211,742.96 | +882 (+0.42%) |
+| `perf/combined` | CSV | 2.358s | 424,163.34 | +212,800 (+100.68%) |
+| `perf/combined` | NDJSON | 2.402s | 416,315.69 | +205,455 (+97.44%) |
 
 ## Memory And Binary Size
 
@@ -135,6 +140,7 @@ xychart-beta
 | `perf/single-transaction` | 7,680 KiB | 7,668 KiB | 3,640,040 bytes |
 | `perf/csv-byterecord` | 7,668 KiB | 7,612 KiB | 3,655,808 bytes |
 | `perf/ndjson-buffer` | 7,596 KiB | 7,632 KiB | 3,638,160 bytes |
+| `perf/combined` | 7,676 KiB | 7,660 KiB | 3,656,168 bytes |
 
 ## Notes
 
@@ -144,5 +150,7 @@ xychart-beta
   being useful in the older cumulative optimization chain.
 - `perf/ndjson-buffer` has the smallest binary and memory footprint in this
   run, but its direct NDJSON speed improvement is small at this batch size.
+- `perf/combined` performs almost as well as `perf/single-transaction`, but the
+  added parser changes do not compound into a faster result in this measurement.
 - Memory values are low compared with older notes because this measurement uses
   the current clean baseline and sampled process `VmHWM` directly per run.
