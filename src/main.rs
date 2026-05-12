@@ -10,7 +10,7 @@ use clap::Parser;
 
 use crate::{
     cli::Args,
-    db::{insert_batch, open_connection},
+    db::{RunInserter, open_connection, with_run_inserter},
     input::read_records,
     metrics::RunMetrics,
     model::CleanRecord,
@@ -28,31 +28,35 @@ fn main() -> Result<()> {
     let mut metrics = RunMetrics::start();
     let mut batch = Vec::with_capacity(args.batch_size);
 
-    // Keep the baseline orchestration simple: transform one streamed record,
-    // append clean rows to an in-memory batch, and flush when the batch is full.
-    read_records(&args.input, args.format, |record| {
-        metrics.total_records += 1;
+    with_run_inserter(&mut connection, |inserter| {
+        // Transform one streamed record, append clean rows to a bounded
+        // in-memory batch, and flush through one SQLite transaction.
+        read_records(&args.input, args.format, |record| {
+            metrics.total_records += 1;
 
-        match transform_record(record) {
-            Ok(TransformResult::Clean(record)) => {
-                batch.push(record);
+            match transform_record(record) {
+                Ok(TransformResult::Clean(record)) => {
+                    batch.push(record);
 
-                if batch.len() >= args.batch_size {
-                    flush_batch(&mut connection, &mut batch, &mut metrics)?;
+                    if batch.len() >= args.batch_size {
+                        flush_batch(inserter, &mut batch, &mut metrics);
+                    }
+                }
+                Ok(TransformResult::FilteredEmptyTag) => {
+                    metrics.filtered_empty_tags += 1;
+                }
+                Err(_) => {
+                    metrics.failed_rows += 1;
                 }
             }
-            Ok(TransformResult::FilteredEmptyTag) => {
-                metrics.filtered_empty_tags += 1;
-            }
-            Err(_) => {
-                metrics.failed_rows += 1;
-            }
-        }
+
+            Ok(())
+        })?;
+
+        flush_batch(inserter, &mut batch, &mut metrics);
 
         Ok(())
     })?;
-
-    flush_batch(&mut connection, &mut batch, &mut metrics)?;
 
     println!("{}", metrics.summary());
 
@@ -60,19 +64,16 @@ fn main() -> Result<()> {
 }
 
 fn flush_batch(
-    connection: &mut rusqlite::Connection,
+    inserter: &mut RunInserter<'_>,
     batch: &mut Vec<CleanRecord>,
     metrics: &mut RunMetrics,
-) -> Result<()> {
+) {
     if batch.is_empty() {
-        return Ok(());
+        return;
     }
 
-    // Each baseline flush owns its SQLite transaction and prepared statement.
-    let result = insert_batch(connection, batch)?;
+    let result = inserter.insert_batch(batch);
     metrics.successful_rows += result.inserted;
     metrics.failed_rows += result.failed;
     batch.clear();
-
-    Ok(())
 }
