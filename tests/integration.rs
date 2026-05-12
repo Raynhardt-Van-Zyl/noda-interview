@@ -117,3 +117,37 @@ fn processes_ndjson_into_sqlite() {
 
     assert_eq!(row, ("beta".to_string(), 0));
 }
+
+#[test]
+fn processes_ndjson_final_line_without_trailing_newline() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("input.ndjson");
+    let db_path = temp_dir.path().join("metrics.sqlite");
+    create_metrics_db(&db_path);
+    fs::write(
+        &input_path,
+        "{\"id\":\"event-1\",\"timestamp\":\"2026-05-11T00:00:00Z\",\"value\":1.0,\"tag\":\"Alpha\"}\n\
+         {\"id\":\"event-2\",\"timestamp\":\"2026-05-11T00:00:01Z\",\"value\":2.0,\"tag\":\"Beta\"}",
+    )
+    .unwrap();
+
+    Command::cargo_bin("noda-interview")
+        .unwrap()
+        .args([
+            "--input",
+            input_path.to_str().unwrap(),
+            "--format",
+            "ndjson",
+            "--db",
+            db_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let connection = Connection::open(db_path).unwrap();
+    let count: i64 = connection
+        .query_row("SELECT COUNT(*) FROM metrics", [], |row| row.get(0))
+        .unwrap();
+
+    assert_eq!(count, 2);
+}
