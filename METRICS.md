@@ -55,6 +55,65 @@ All measured branches produced the same row outcomes for both CSV and NDJSON.
 | `perf/csv-byterecord` | 218,103 | +6,991 (+3.31%) | 4.585s | 7,640 KiB | +12 KiB (+0.16%) | 3,655,808 bytes | +16,312 bytes (+0.45%) |
 | `perf/ndjson-buffer` | 217,979 | +6,867 (+3.25%) | 4.591s | 7,614 KiB | -14 KiB (-0.18%) | 3,638,160 bytes | -1,336 bytes (-0.04%) |
 
+Chart labels:
+
+```text
+base = main
+tx   = perf/single-transaction
+csv  = perf/csv-byterecord
+ndj  = perf/ndjson-buffer
+```
+
+## Graphs
+
+```mermaid
+xychart-beta
+    title "Average Throughput"
+    x-axis ["base", "tx", "csv", "ndj"]
+    y-axis "rows/sec" 0 --> 450000
+    bar [211112, 431257, 218103, 217979]
+```
+
+```mermaid
+xychart-beta
+    title "Average Duration"
+    x-axis ["base", "tx", "csv", "ndj"]
+    y-axis "seconds" 0 --> 5
+    bar [4.737, 2.319, 4.585, 4.591]
+```
+
+```mermaid
+xychart-beta
+    title "Average Max RSS"
+    x-axis ["base", "tx", "csv", "ndj"]
+    y-axis "KiB" 0 --> 8000
+    bar [7628, 7674, 7640, 7614]
+```
+
+```mermaid
+xychart-beta
+    title "Release Binary Size"
+    x-axis ["base", "tx", "csv", "ndj"]
+    y-axis "bytes" 0 --> 3700000
+    bar [3639496, 3640040, 3655808, 3638160]
+```
+
+```mermaid
+xychart-beta
+    title "CSV Throughput"
+    x-axis ["base", "tx", "csv", "ndj"]
+    y-axis "rows/sec" 0 --> 450000
+    bar [211363, 436661, 217488, 224214]
+```
+
+```mermaid
+xychart-beta
+    title "NDJSON Throughput"
+    x-axis ["base", "tx", "csv", "ndj"]
+    y-axis "rows/sec" 0 --> 450000
+    bar [210861, 425854, 218718, 211743]
+```
+
 ## Per-Format Speed
 
 | Branch | Format | Duration | Rows/sec | Delta vs same-format base |
