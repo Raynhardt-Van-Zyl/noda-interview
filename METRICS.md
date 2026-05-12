@@ -21,8 +21,6 @@ Peak RSS:
   sampled from /proc/<pid>/status VmHWM while the process ran
 Binary size:
   stat -c %s target/release/noda-interview
-Raw results:
-  target/scale-bench-10k-10m-full/results.tsv
 ```
 
 The CLI reports rows per second from total processed input records. Filtered
@@ -33,7 +31,7 @@ business filter, not a parsing or write failure.
 
 | Label | Branch | Commit | Purpose |
 | --- | --- | --- | --- |
-| `base` | `main` | `6b7099e` | Clean baseline plus current docs and benchmark setup. |
+| `base` | `main` | `6b7099e` | Measured clean baseline at the time of the scale run. |
 | `tx` | `perf/single-transaction` | `02872de` | Use one transaction, avoid duplicate insert errors, and raise SQLite page cache for bulk loading. |
 | `csv` | `perf/csv-byterecord` | `44922ed` | Parse CSV with reusable `csv::ByteRecord` instead of serde row deserialization. |
 | `ndj` | `perf/ndjson-buffer` | `4a74fbd` | Reuse one buffer while reading NDJSON lines. |

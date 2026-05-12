@@ -9,6 +9,10 @@ use anyhow::{Context, Error, Result};
 use crate::{cli::InputFormat, model::RawRecord};
 
 /// Stream records from the selected input format into the provided handler.
+///
+/// The handler receives a `Result<RawRecord>` for each physical input row. That
+/// lets the caller count malformed rows and continue processing the rest of the
+/// file instead of aborting the whole ETL run on the first parse error.
 pub fn read_records(
     path: impl AsRef<Path>,
     format: InputFormat,

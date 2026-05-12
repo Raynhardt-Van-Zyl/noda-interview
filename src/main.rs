@@ -28,8 +28,9 @@ fn main() -> Result<()> {
     let mut metrics = RunMetrics::start();
     let mut batch = Vec::with_capacity(args.batch_size);
 
-    // Keep the baseline orchestration simple: transform one streamed record,
-    // append clean rows to an in-memory batch, and flush when the batch is full.
+    // Keep orchestration explicit for review: every streamed row updates the
+    // counters, valid rows are batched, and malformed rows are counted without
+    // stopping the rest of the file.
     read_records(&args.input, args.format, |record| {
         metrics.total_records += 1;
         let record = match record {

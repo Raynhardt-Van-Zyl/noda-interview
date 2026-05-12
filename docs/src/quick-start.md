@@ -1,8 +1,9 @@
 # Quick Start
 
-Create the SQLite table before running the loader:
+Create the SQLite database and table before running the loader:
 
-```sql
+```bash
+sqlite3 metrics.sqlite <<'SQL'
 CREATE TABLE metrics (
   id TEXT PRIMARY KEY,
   timestamp INTEGER NOT NULL,
@@ -10,6 +11,7 @@ CREATE TABLE metrics (
   tag TEXT NOT NULL,
   positive INTEGER NOT NULL
 );
+SQL
 ```
 
 Run a CSV load:
@@ -31,13 +33,14 @@ cargo run --release -- \
   --db metrics.sqlite
 ```
 
-The command prints a summary with row counts, duration, and throughput.
+The command prints a summary with row counts, duration, and throughput. Duration
+and rows/sec vary by machine and input size.
 
 ```text
 Total records processed: 1000011
 Successful rows written: 685619
 Failed rows: 247928
 Filtered empty tags: 66464
-Total duration: 3.262s
-Rows per second: 306542.79
+Total duration: ...
+Rows per second: ...
 ```

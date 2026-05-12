@@ -208,3 +208,73 @@ fn counts_malformed_ndjson_rows_as_failed_and_continues() {
 
     assert_eq!(count, 2);
 }
+
+#[test]
+fn fails_when_database_file_does_not_exist() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("input.csv");
+    let db_path = temp_dir.path().join("missing.sqlite");
+    fs::write(&input_path, "id,timestamp,value,tag\n").unwrap();
+
+    Command::cargo_bin("noda-interview")
+        .unwrap()
+        .args([
+            "--input",
+            input_path.to_str().unwrap(),
+            "--format",
+            "csv",
+            "--db",
+            db_path.to_str().unwrap(),
+        ])
+        .assert()
+        .failure();
+
+    assert!(!db_path.exists());
+}
+
+#[test]
+fn fails_when_metrics_table_is_missing() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("input.csv");
+    let db_path = temp_dir.path().join("metrics.sqlite");
+    fs::write(&input_path, "id,timestamp,value,tag\n").unwrap();
+    Connection::open(&db_path).unwrap();
+
+    Command::cargo_bin("noda-interview")
+        .unwrap()
+        .args([
+            "--input",
+            input_path.to_str().unwrap(),
+            "--format",
+            "csv",
+            "--db",
+            db_path.to_str().unwrap(),
+        ])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn fails_when_metrics_table_schema_is_wrong() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("input.csv");
+    let db_path = temp_dir.path().join("metrics.sqlite");
+    fs::write(&input_path, "id,timestamp,value,tag\n").unwrap();
+    let connection = Connection::open(&db_path).unwrap();
+    connection
+        .execute("CREATE TABLE metrics (id TEXT PRIMARY KEY)", [])
+        .unwrap();
+
+    Command::cargo_bin("noda-interview")
+        .unwrap()
+        .args([
+            "--input",
+            input_path.to_str().unwrap(),
+            "--format",
+            "csv",
+            "--db",
+            db_path.to_str().unwrap(),
+        ])
+        .assert()
+        .failure();
+}

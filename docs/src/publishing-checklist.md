@@ -1,4 +1,4 @@
-# Future Publishing Checklist
+# Appendix: Future Publishing
 
 Before publishing to crates.io, decide and add:
 

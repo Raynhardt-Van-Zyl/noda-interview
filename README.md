@@ -1,26 +1,24 @@
 # Noda Interview ETL
 
-Baseline Rust ETL for streaming CSV or NDJSON records into an existing SQLite
+Rust ETL tool for streaming CSV or NDJSON records into an existing SQLite
 `metrics` table.
-
-This `main` branch intentionally represents the pre-optimization baseline. The
-optimization branches are checked out as sibling worktrees so runtime behavior
-can be compared without repeatedly switching branches.
 
 ## Features
 
 - Streams CSV and NDJSON without loading the full file into memory.
 - Normalizes timestamps, tags, and positivity flags.
 - Writes clean rows to SQLite in configurable batches.
+- Validates that the SQLite database and target table already exist.
 - Counts duplicate primary-key writes as failed rows.
 - Reports row counts, duration, and throughput.
-- Includes mdBook documentation, GitLab CI, and baseline metrics notes.
+- Includes mdBook documentation, GitLab CI, and sample metrics notes.
 
 ## Quick Start
 
-Create the target SQLite table:
+Create the target SQLite database and table:
 
-```sql
+```bash
+sqlite3 metrics.sqlite <<'SQL'
 CREATE TABLE metrics (
   id TEXT PRIMARY KEY,
   timestamp INTEGER NOT NULL,
@@ -28,6 +26,7 @@ CREATE TABLE metrics (
   tag TEXT NOT NULL,
   positive INTEGER NOT NULL
 );
+SQL
 ```
 
 Run the CLI:
@@ -85,6 +84,9 @@ positive = 1 when value > 0.0, otherwise 0
 NaN or infinite values -> failed row
 duplicate id -> failed row
 ```
+
+`Filtered empty tags` are reported separately from `Failed rows`: they are
+valid business skips, not malformed input or database failures.
 
 ## Documentation
 

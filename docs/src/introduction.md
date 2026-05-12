@@ -10,6 +10,6 @@ The current implementation focuses on three constraints:
 - Keep the implementation small enough to understand before optimization.
 - Batch SQLite writes while preserving the original baseline behavior.
 
-The project is not published on crates.io yet. This book, the metrics file, and
-the CI setup are groundwork for making future publishing and optimization work
-cleaner.
+Performance experiments, Git workflow notes, and future publishing notes are
+kept as supporting documentation. The primary implementation remains the small
+streaming ETL described in the assignment.

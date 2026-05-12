@@ -21,7 +21,9 @@ id, timestamp, value, tag
 ```
 
 The default seed is fixed, so generated fixtures are deterministic unless a
-different `--seed` is provided.
+different `--seed` is provided. With `--dirty`, the command above writes
+100,011 records because 11 deterministic edge rows are prepended to the
+requested random rows.
 
 ## Covered Edge Cases
 
@@ -38,8 +40,8 @@ the ETL error-handling path.
 | Empty tags | Business filter | Counted as filtered, not inserted. |
 | Duplicate IDs | SQLite primary-key handling | Counted as failed rows. |
 | Invalid timestamps | Transform validation | Counted as failed rows. |
-| Non-finite numeric values | Value validation | Counted as failed rows. |
-| Malformed CSV/NDJSON rows | Parser error handling | Counted as failed rows and processing continues. |
+| Non-finite numeric values | Value validation | Covered by targeted tests and optional `--nonstandard-json-floats` fixtures. |
+| Malformed CSV/NDJSON rows | Parser error handling | Covered by targeted integration tests. |
 | Tags with quotes, commas, tabs, and Unicode | Format escaping and parsing | Inserted after normal normalization. |
 
 ## Why This Matters
