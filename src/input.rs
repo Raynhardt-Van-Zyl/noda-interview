@@ -116,12 +116,20 @@ pub fn read_ndjson_records(
     let path = path.as_ref();
     let file = File::open(path)
         .with_context(|| format!("failed to open NDJSON input {}", path.display()))?;
-    let reader = BufReader::new(file);
+    let mut reader = BufReader::new(file);
+    let mut line = String::new();
     let mut count = 0;
 
-    for line in reader.lines() {
-        let line = line
+    loop {
+        line.clear();
+        let bytes_read = reader
+            .read_line(&mut line)
             .with_context(|| format!("failed to read NDJSON input line in {}", path.display()))?;
+
+        if bytes_read == 0 {
+            break;
+        }
+
         let record: RawRecord = serde_json::from_str(&line)
             .with_context(|| format!("failed to parse NDJSON record in {}", path.display()))?;
         handle_record(record)?;
