@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 
 use crate::{cli::InputFormat, model::RawRecord};
 
@@ -12,7 +12,7 @@ use crate::{cli::InputFormat, model::RawRecord};
 pub fn read_records(
     path: impl AsRef<Path>,
     format: InputFormat,
-    handle_record: impl FnMut(RawRecord) -> Result<()>,
+    handle_record: impl FnMut(Result<RawRecord>) -> Result<()>,
 ) -> Result<usize> {
     match format {
         InputFormat::Csv => read_csv_records(path, handle_record),
@@ -23,7 +23,7 @@ pub fn read_records(
 /// Read CSV records with serde deserialization, one record at a time.
 pub fn read_csv_records(
     path: impl AsRef<Path>,
-    mut handle_record: impl FnMut(RawRecord) -> Result<()>,
+    mut handle_record: impl FnMut(Result<RawRecord>) -> Result<()>,
 ) -> Result<usize> {
     let path = path.as_ref();
     let mut reader = csv::Reader::from_path(path)
@@ -31,8 +31,9 @@ pub fn read_csv_records(
     let mut count = 0;
 
     for record in reader.deserialize() {
-        let record: RawRecord =
-            record.with_context(|| format!("failed to parse CSV record in {}", path.display()))?;
+        let record = record
+            .map_err(Error::from)
+            .with_context(|| format!("failed to parse CSV record in {}", path.display()));
         handle_record(record)?;
         count += 1;
     }
@@ -43,7 +44,7 @@ pub fn read_csv_records(
 /// Read newline-delimited JSON records, one line at a time.
 pub fn read_ndjson_records(
     path: impl AsRef<Path>,
-    mut handle_record: impl FnMut(RawRecord) -> Result<()>,
+    mut handle_record: impl FnMut(Result<RawRecord>) -> Result<()>,
 ) -> Result<usize> {
     let path = path.as_ref();
     let file = File::open(path)
@@ -52,10 +53,12 @@ pub fn read_ndjson_records(
     let mut count = 0;
 
     for line in reader.lines() {
-        let line = line
-            .with_context(|| format!("failed to read NDJSON input line in {}", path.display()))?;
-        let record: RawRecord = serde_json::from_str(&line)
-            .with_context(|| format!("failed to parse NDJSON record in {}", path.display()))?;
+        let record = line
+            .with_context(|| format!("failed to read NDJSON input line in {}", path.display()))
+            .and_then(|line| {
+                serde_json::from_str(&line)
+                    .with_context(|| format!("failed to parse NDJSON record in {}", path.display()))
+            });
         handle_record(record)?;
         count += 1;
     }

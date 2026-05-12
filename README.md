@@ -90,6 +90,8 @@ duplicate id -> failed row
 
 - mdBook source: [docs/](docs/)
 - Baseline metrics: [METRICS.md](METRICS.md)
+- Input data spoofing and edge cases: [INPUT_DATA_SPOOFING.md](INPUT_DATA_SPOOFING.md)
+- Git branch, worktree, and CI setup: [GIT_WORKFLOW.md](GIT_WORKFLOW.md)
 - Build the book locally with `mdbook build docs`.
 
 ## Development

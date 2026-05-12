@@ -117,3 +117,94 @@ fn processes_ndjson_into_sqlite() {
 
     assert_eq!(row, ("beta".to_string(), 0));
 }
+
+#[test]
+fn counts_malformed_csv_rows_as_failed_and_continues() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("input.csv");
+    let db_path = temp_dir.path().join("metrics.sqlite");
+    create_metrics_db(&db_path);
+    fs::write(
+        &input_path,
+        "id,timestamp,value,tag\n\
+         ok-1,2026-05-11T00:00:00Z,1.5,prod\n\
+         bad-value,2026-05-11T00:00:01Z,not-a-float,prod\n\
+         ok-2,2026-05-11T00:00:02Z,-1.0, Beta \n",
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("noda-interview")
+        .unwrap()
+        .args([
+            "--input",
+            input_path.to_str().unwrap(),
+            "--format",
+            "csv",
+            "--db",
+            db_path.to_str().unwrap(),
+            "--batch-size",
+            "1",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let stdout = String::from_utf8(output).unwrap();
+
+    assert!(stdout.contains("Total records processed: 3"));
+    assert!(stdout.contains("Successful rows written: 2"));
+    assert!(stdout.contains("Failed rows: 1"));
+
+    let connection = Connection::open(db_path).unwrap();
+    let count: i64 = connection
+        .query_row("SELECT COUNT(*) FROM metrics", [], |row| row.get(0))
+        .unwrap();
+
+    assert_eq!(count, 2);
+}
+
+#[test]
+fn counts_malformed_ndjson_rows_as_failed_and_continues() {
+    let temp_dir = tempdir().unwrap();
+    let input_path = temp_dir.path().join("input.ndjson");
+    let db_path = temp_dir.path().join("metrics.sqlite");
+    create_metrics_db(&db_path);
+    fs::write(
+        &input_path,
+        "{\"id\":\"ok-1\",\"timestamp\":\"2026-05-11T00:00:00Z\",\"value\":1.5,\"tag\":\"prod\"}\n\
+         {not valid json}\n\
+         {\"id\":\"ok-2\",\"timestamp\":\"2026-05-11T00:00:02Z\",\"value\":-1.0,\"tag\":\" Beta \"}\n",
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("noda-interview")
+        .unwrap()
+        .args([
+            "--input",
+            input_path.to_str().unwrap(),
+            "--format",
+            "ndjson",
+            "--db",
+            db_path.to_str().unwrap(),
+            "--batch-size",
+            "1",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let stdout = String::from_utf8(output).unwrap();
+
+    assert!(stdout.contains("Total records processed: 3"));
+    assert!(stdout.contains("Successful rows written: 2"));
+    assert!(stdout.contains("Failed rows: 1"));
+
+    let connection = Connection::open(db_path).unwrap();
+    let count: i64 = connection
+        .query_row("SELECT COUNT(*) FROM metrics", [], |row| row.get(0))
+        .unwrap();
+
+    assert_eq!(count, 2);
+}

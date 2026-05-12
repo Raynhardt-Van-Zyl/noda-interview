@@ -32,6 +32,13 @@ fn main() -> Result<()> {
     // append clean rows to an in-memory batch, and flush when the batch is full.
     read_records(&args.input, args.format, |record| {
         metrics.total_records += 1;
+        let record = match record {
+            Ok(record) => record,
+            Err(_) => {
+                metrics.failed_rows += 1;
+                return Ok(());
+            }
+        };
 
         match transform_record(record) {
             Ok(TransformResult::Clean(record)) => {
