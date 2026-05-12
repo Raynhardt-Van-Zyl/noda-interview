@@ -10,5 +10,5 @@ Before publishing to crates.io, decide and add:
 - README content that works well on crates.io.
 - Versioning and release notes process.
 
-The current baseline is a binary crate, so publishing work should include an
-explicit API decision rather than accidentally exposing internals.
+The current crate is a binary, so publishing work should include an explicit API
+decision rather than accidentally exposing internals.

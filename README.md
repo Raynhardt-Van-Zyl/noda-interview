@@ -11,7 +11,7 @@ Rust ETL tool for streaming CSV or NDJSON records into an existing SQLite
 - Validates that the SQLite database and target table already exist.
 - Counts duplicate primary-key writes as failed rows.
 - Reports row counts, duration, and throughput.
-- Includes mdBook documentation, GitLab CI, and sample metrics notes.
+- Documents usage, generated fixtures, CI checks, and benchmark results.
 
 ## Quick Start
 
@@ -92,7 +92,7 @@ valid business skips, not malformed input or database failures.
 
 - mdBook source: [docs/](docs/)
 - Baseline metrics: [METRICS.md](METRICS.md)
-- Input data spoofing and edge cases: [INPUT_DATA_SPOOFING.md](INPUT_DATA_SPOOFING.md)
+- Test data generation and edge cases: [INPUT_DATA_SPOOFING.md](INPUT_DATA_SPOOFING.md)
 - Git branch, worktree, and CI setup: [GIT_WORKFLOW.md](GIT_WORKFLOW.md)
 - Build the book locally with `mdbook build docs`.
 

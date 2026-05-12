@@ -3,7 +3,7 @@
 - [Introduction](introduction.md)
 - [Quick Start](quick-start.md)
 - [Input Formats](input-formats.md)
-- [Input Data Spoofing](input-data-spoofing.md)
+- [Test Data Generation](input-data-spoofing.md)
 - [SQLite Output](sqlite-output.md)
 - [Pipeline Architecture](pipeline-architecture.md)
 - [Code Structure](code-structure.md)

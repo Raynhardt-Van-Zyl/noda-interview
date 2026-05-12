@@ -1,14 +1,14 @@
 # Git Workflow
 
-The main branch is the intended assignment submission. It contains the clean
-baseline implementation, tests, documentation, CI setup, and benchmark summary.
+The `main` branch is the assignment submission. It contains the implementation,
+tests, documentation, CI setup, and benchmark summary.
 
-Optimization work was kept on separate branches so the assignment solution
-remains easy to review.
+Performance experiments were kept on separate branches so the submitted code
+stays easy to review.
 
 | Branch | Purpose |
 | --- | --- |
-| `main` | Clean assignment implementation. |
+| `main` | Assignment implementation. |
 | `perf/single-transaction` | SQLite transaction-focused optimization. |
 | `perf/csv-byterecord` | CSV parser optimization experiment. |
 | `perf/ndjson-buffer` | NDJSON buffer reuse experiment. |
@@ -45,5 +45,5 @@ working tree.
 | `docs` | mdBook build and mdBook tests. |
 | `performance` | Deterministic 100k-row fixture and a broad throughput gate. |
 
-Generated benchmark files live under `target/` and are intentionally ignored by
-git. The committed benchmark narrative lives in `METRICS.md`.
+Generated benchmark files live under `target/` and are ignored by git. The
+committed benchmark summary lives in `METRICS.md`.

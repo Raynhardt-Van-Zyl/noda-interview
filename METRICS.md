@@ -31,7 +31,7 @@ business filter, not a parsing or write failure.
 
 | Label | Branch | Commit | Purpose |
 | --- | --- | --- | --- |
-| `base` | `main` | `6b7099e` | Measured clean baseline at the time of the scale run. |
+| `base` | `main` | `6b7099e` | Measured baseline at the time of the scale run. |
 | `tx` | `perf/single-transaction` | `02872de` | Use one transaction, avoid duplicate insert errors, and raise SQLite page cache for bulk loading. |
 | `csv` | `perf/csv-byterecord` | `44922ed` | Parse CSV with reusable `csv::ByteRecord` instead of serde row deserialization. |
 | `ndj` | `perf/ndjson-buffer` | `4a74fbd` | Reuse one buffer while reading NDJSON lines. |
@@ -185,7 +185,6 @@ xychart-beta
   about 24 MiB once the larger SQLite page cache is active.
 - `perf/csv-byterecord` and `perf/ndjson-buffer` do not help at database-heavy
   scales. At 10M rows they are both slower than baseline.
-- `perf/combined` is faster than baseline, but slower than the latest
-  `perf/single-transaction` branch at every scale above 10k rows. It should not
-  be treated as the best branch until it is rebuilt from the latest transaction
-  optimization.
+- `perf/combined` is faster than baseline, but slower than the measured
+  `perf/single-transaction` branch at every scale above 10k rows. Rebase and
+  rerun it before treating it as the candidate branch.

@@ -28,9 +28,8 @@ fn main() -> Result<()> {
     let mut metrics = RunMetrics::start();
     let mut batch = Vec::with_capacity(args.batch_size);
 
-    // Keep orchestration explicit for review: every streamed row updates the
-    // counters, valid rows are batched, and malformed rows are counted without
-    // stopping the rest of the file.
+    // Count every input row, batch valid rows, and keep going after row-level
+    // parse or validation failures.
     read_records(&args.input, args.format, |record| {
         metrics.total_records += 1;
         let record = match record {
@@ -76,7 +75,7 @@ fn flush_batch(
         return Ok(());
     }
 
-    // Each baseline flush owns its SQLite transaction and prepared statement.
+    // A batch uses one transaction and one prepared statement.
     let result = insert_batch(connection, batch)?;
     metrics.successful_rows += result.inserted;
     metrics.failed_rows += result.failed;

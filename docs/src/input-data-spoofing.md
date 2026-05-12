@@ -1,8 +1,8 @@
-# Input Data Spoofing
+# Test Data Generation
 
-The assignment requires an example dataset with more than 100k records. This
-project uses a deterministic generator instead of hand-maintained large files,
-so correctness and performance runs can be reproduced.
+The assignment requires an example dataset with more than 100k records. The
+project uses a deterministic generator so the same data can be recreated for
+local runs and CI.
 
 Generate CSV and NDJSON fixtures:
 

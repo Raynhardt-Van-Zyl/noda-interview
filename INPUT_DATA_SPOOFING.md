@@ -1,8 +1,8 @@
-# Input Data Spoofing
+# Test Data Generation
 
 The assignment asks for an example dataset with more than 100k records. This
-project includes a generator so the same edge cases can be reproduced instead
-of hand-maintained in static files.
+project includes a deterministic generator so local runs and CI can use the same
+data shape.
 
 ## Generator
 
@@ -27,8 +27,8 @@ requested random rows.
 
 ## Covered Edge Cases
 
-The `--dirty` option intentionally mixes normal records with rows that exercise
-the ETL error-handling path.
+The `--dirty` option mixes normal records with rows that exercise the
+ETL error-handling path.
 
 | Case | Purpose | Expected behavior |
 | --- | --- | --- |
@@ -44,9 +44,9 @@ the ETL error-handling path.
 | Malformed CSV/NDJSON rows | Parser error handling | Covered by targeted integration tests. |
 | Tags with quotes, commas, tabs, and Unicode | Format escaping and parsing | Inserted after normal normalization. |
 
-## Why This Matters
+## Coverage
 
-The generated data checks the assignment requirements directly:
+The generated data covers the assignment requirements directly:
 
 - both supported input formats are exercised with the same logical data shape;
 - the file is streamed, so fixture size can be increased without changing code;

@@ -1,7 +1,8 @@
 # Code Structure
 
-This branch is intentionally a simple binary crate. It keeps the baseline easy
-to read before comparing it with the optimization worktrees.
+This is a small binary crate. The modules follow the same order as the ETL
+pipeline, so the command-line entry point does not need to know CSV, JSON, or
+SQLite details directly.
 
 | File | Purpose |
 | --- | --- |
@@ -13,6 +14,5 @@ to read before comparing it with the optimization worktrees.
 | `src/db.rs` | SQLite connection and batch insertion. |
 | `src/metrics.rs` | Runtime counters and summary formatting. |
 
-The crate can be split into a reusable library before publishing, but the
-baseline keeps all orchestration in `main.rs` so the original design remains
-obvious.
+The crate could be split into a reusable library later. For this assignment,
+keeping the orchestration in `main.rs` makes the data flow easy to follow.

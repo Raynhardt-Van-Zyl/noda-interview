@@ -87,8 +87,9 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-#overkill of a random id generator, used a bit of AI for this beast of point bloat 
+
 def random_id(rng: random.Random) -> str:
+    """Generate IDs with varied shapes for parser and primary-key coverage."""
     style = rng.choice(("uuid", "short", "numeric", "prefixed", "edge_chars"))
     if style == "uuid":
         return str(uuid.UUID(int=rng.getrandbits(128)))
@@ -100,8 +101,9 @@ def random_id(rng: random.Random) -> str:
         return f"event-{rng.randint(1, 999_999):06d}"
     return rng.choice((" id-with-spaces ", "id,comma", 'id"quote', "id/slash", "id:colon"))
 
-#ISO-8601 is not very standard IMO 
+
 def random_timestamp(rng: random.Random, base: datetime) -> str:
+    """Emit RFC 3339 timestamp shapes accepted by the loader."""
     offset_seconds = rng.randint(-365 * 24 * 3600, 365 * 24 * 3600)
     microseconds = rng.choice((0, rng.randint(1, 999_999)))
     dt = base + timedelta(seconds=offset_seconds, microseconds=microseconds)
