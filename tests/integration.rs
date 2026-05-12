@@ -28,12 +28,12 @@ fn processes_csv_into_sqlite_and_reports_metrics() {
     create_metrics_db(&db_path);
     fs::write(
         &input_path,
-        "id,timestamp,value,tag\n\
-         ok,2026-05-11T00:00:00Z,1.5, Prod \n\
-         empty,2026-05-11T00:00:01Z,2.0,   \n\
-         bad-time,not-a-date,3.0,prod\n\
-         dup,2026-05-11T00:00:03Z,4.0,prod\n\
-         dup,2026-05-11T00:00:04Z,5.0,prod\n",
+        "tag,value,timestamp,id\n\
+         Prod ,1.5,2026-05-11T00:00:00Z,ok\n\
+            ,2.0,2026-05-11T00:00:01Z,empty\n\
+         prod,3.0,not-a-date,bad-time\n\
+         prod,4.0,2026-05-11T00:00:03Z,dup\n\
+         prod,5.0,2026-05-11T00:00:04Z,dup\n",
     )
     .unwrap();
 
