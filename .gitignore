@@ -1,5 +1,6 @@
 /target
 /docs/book
+.codex/
 __pycache__/
 *.db
 *.sqlite
