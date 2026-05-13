@@ -13,6 +13,9 @@ mdbook test docs
 scripts/ci_performance.sh
 ```
 
+The checked-in repository does not include generated sample datasets. Recreate
+them with `examples/data_generator.py` when needed.
+
 Useful source entry points:
 
 | File | Purpose |

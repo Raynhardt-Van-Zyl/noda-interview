@@ -29,11 +29,21 @@ CREATE TABLE metrics (
 SQL
 ```
 
+Generate a local example fixture:
+
+```bash
+python3 examples/data_generator.py \
+  --rows 100000 \
+  --dirty \
+  --csv target/fixtures/sample.csv \
+  --ndjson target/fixtures/sample.ndjson
+```
+
 Run the CLI:
 
 ```bash
 cargo run --release -- \
-  --input examples/sample.csv \
+  --input target/fixtures/sample.csv \
   --format csv \
   --db metrics.sqlite \
   --batch-size 1000
@@ -43,7 +53,7 @@ Use NDJSON by changing the input path and format:
 
 ```bash
 cargo run --release -- \
-  --input examples/sample.ndjson \
+  --input target/fixtures/sample.ndjson \
   --format ndjson \
   --db metrics.sqlite
 ```
