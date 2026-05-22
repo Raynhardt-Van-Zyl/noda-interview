@@ -8,6 +8,7 @@
 - [Pipeline Architecture](pipeline-architecture.md)
 - [Code Structure](code-structure.md)
 - [Runtime Metrics](runtime-metrics.md)
+- [Observability and Debug Logs](observability.md)
 - [Performance and Profiling](performance-and-profiling.md)
 - [Git Workflow](git-workflow.md)
 - [Development](development.md)

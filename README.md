@@ -3,6 +3,9 @@
 Rust ETL tool for streaming CSV or NDJSON records into an existing SQLite
 `metrics` table.
 
+The project exposes both a CLI and a reusable Rust library API via
+`EtlConfig` and `run_etl`.
+
 ## Features
 
 - Streams CSV and NDJSON without loading the full file into memory.
@@ -65,6 +68,7 @@ cargo run --release -- \
 --format <csv|ndjson>          Input file format
 --db <path>                    SQLite database file
 --batch-size <number>          Clean records per batch, default 1000
+--log-file <path>              Optional JSONL file for failed/filtered rows
 ```
 
 The SQLite database file and `metrics` table must already exist before running

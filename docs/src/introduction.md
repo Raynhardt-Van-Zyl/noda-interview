@@ -8,7 +8,9 @@ The implementation focuses on three constraints:
 
 - Stream input instead of reading entire files into memory.
 - Keep parsing, transformation, and database writes separated.
-- Batch SQLite writes while keeping row-level failures visible in the metrics.
+- Batch SQLite writes while keeping row-level failures visible in metrics and
+  structured debug logs.
 
 The rest of this book documents how to run the loader, what input it accepts,
-how rows are transformed, and how the test data was generated.
+how rows are transformed, how failures are logged, and how the test data was
+generated.

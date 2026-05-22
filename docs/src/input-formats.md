@@ -17,9 +17,10 @@ CSV input expects this header:
 id,timestamp,value,tag
 ```
 
-Rows are read through `csv::Reader::deserialize()`. This streams records from
-the file and hands each `RawRecord` to the pipeline without retaining previous
-rows.
+Rows are read through `csv::Reader::records()`, then deserialized with the
+captured header row. The pipeline keeps a small `RecordContext` beside each
+parsed record so later validation or database failures can still point back to
+the original CSV row number and raw field values.
 
 ## NDJSON
 
@@ -31,7 +32,8 @@ NDJSON input expects one JSON object per line:
 
 Lines are read through `BufReader::lines()` and parsed with
 `serde_json::from_str`. This keeps the input streaming even though each line is
-allocated while it is parsed.
+allocated while it is parsed. Malformed JSON lines are reported to the caller
+with the raw line text so they can be written to the structured debug log.
 
 ## Transformation Rules
 
@@ -43,3 +45,7 @@ positive = 1 when value > 0.0, otherwise 0
 NaN or infinite values -> failed row
 duplicate id -> failed row
 ```
+
+Rows are handled independently. A parse error, invalid timestamp, non-finite
+value, empty tag, or duplicate primary key does not stop the rest of the input
+file from being processed.
