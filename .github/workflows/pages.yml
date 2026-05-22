@@ -1,4 +1,4 @@
-name: Publish mdBook
+name: Publish documentation
 
 on:
   push:
@@ -28,10 +28,20 @@ jobs:
       - name: Build book
         run: mdbook build docs
 
+      - name: Build Rust API docs
+        run: cargo doc --no-deps
+
+      - name: Assemble Pages site
+        run: |
+          mkdir -p pages
+          cp -R docs/book/. pages/
+          mkdir -p pages/rustdoc
+          cp -R target/doc/. pages/rustdoc/
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: docs/book
+          path: pages
 
   deploy:
     environment:
