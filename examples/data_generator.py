@@ -12,11 +12,33 @@ import math
 import random
 import string
 import uuid
+from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Literal, TypedDict, cast
 
-FIELDNAMES = ("id", "timestamp", "value", "tag")
+FieldName = Literal["id", "timestamp", "value", "tag"]
+
+FIELDNAMES: tuple[FieldName, ...] = ("id", "timestamp", "value", "tag")
+
+
+class Row(TypedDict):
+    id: str
+    timestamp: str
+    value: float
+    tag: str
+
+
+@dataclass(frozen=True)
+class Args:
+    rows: int
+    seed: int
+    csv: Path
+    ndjson: Path
+    dirty: bool
+    nonstandard_json_floats: bool
+    start: str
 
 # made up random tags, but also added some weird stuff like unicode and emoji -_'
 TAGS = (
@@ -57,35 +79,44 @@ NONSTANDARD_FLOATS = (math.nan, math.inf, -math.inf)
 
 # just made some fancy python cli parameters for the script, but probably pointless as
 # this will only be used once to generate all the data
-def parse_args() -> argparse.Namespace:
+def parse_args() -> Args:
     parser = argparse.ArgumentParser(
         description="Generate randomized ETL fixture data in CSV and NDJSON formats."
     )
-    parser.add_argument("-n", "--rows", type=int, default=100, help="rows to generate")
-    parser.add_argument("--seed", type=int, default=42, help="random seed")
-    parser.add_argument("--csv", type=Path, default=Path("sample.csv"), help="CSV output path")
-    parser.add_argument(
+    _ = parser.add_argument("-n", "--rows", type=int, default=100, help="rows to generate")
+    _ = parser.add_argument("--seed", type=int, default=42, help="random seed")
+    _ = parser.add_argument("--csv", type=Path, default=Path("sample.csv"), help="CSV output path")
+    _ = parser.add_argument(
         "--ndjson",
         type=Path,
         default=Path("sample.ndjson"),
         help="NDJSON output path",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--dirty",
         action="store_true",
         help="include rows with empty fields, duplicate IDs, invalid timestamps, and other validation cases",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--nonstandard-json-floats",
         action="store_true",
         help="with --dirty, allow NaN/Infinity in NDJSON for strict-parser rejection tests",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--start",
         default="2026-01-01T00:00:00+00:00",
         help="base ISO-8601 timestamp for generated rows",
     )
-    return parser.parse_args()
+    namespace = parser.parse_args()
+    return Args(
+        rows=cast(int, namespace.rows),
+        seed=cast(int, namespace.seed),
+        csv=cast(Path, namespace.csv),
+        ndjson=cast(Path, namespace.ndjson),
+        dirty=cast(bool, namespace.dirty),
+        nonstandard_json_floats=cast(bool, namespace.nonstandard_json_floats),
+        start=cast(str, namespace.start),
+    )
 
 
 def random_id(rng: random.Random) -> str:
@@ -139,7 +170,7 @@ def random_value(rng: random.Random) -> float:
     return rng.uniform(-10_000, 10_000)
 
 # generation of the actual row  
-def random_row(rng: random.Random, base: datetime) -> dict[str, Any]:
+def random_row(rng: random.Random, base: datetime) -> Row:
     return {
         "id": random_id(rng),
         "timestamp": random_timestamp(rng, base),
@@ -148,8 +179,8 @@ def random_row(rng: random.Random, base: datetime) -> dict[str, Any]:
     }
 
 
-def edge_rows(include_nonstandard_floats: bool) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = [
+def edge_rows(include_nonstandard_floats: bool) -> list[Row]:
+    rows: list[Row] = [
         {"id": "", "timestamp": "2026-01-01T00:00:00Z", "value": 0.0, "tag": "empty-id"},
         {"id": "duplicate-id", "timestamp": "2026-01-01T00:00:00Z", "value": 1.0, "tag": "first"},
         {"id": "duplicate-id", "timestamp": "2026-01-01T00:00:01Z", "value": 2.0, "tag": "second"},
@@ -169,7 +200,7 @@ def edge_rows(include_nonstandard_floats: bool) -> list[dict[str, Any]]:
         )
     return rows
 
-def generated_rows(rng: random.Random, base: datetime, count: int) -> Iterable[dict[str, Any]]:
+def generated_rows(rng: random.Random, base: datetime, count: int) -> Iterable[Row]:
     for _ in range(count):
         yield random_row(rng, base)
 
@@ -177,7 +208,7 @@ def generated_rows(rng: random.Random, base: datetime, count: int) -> Iterable[d
 def write_outputs(
     csv_path: Path,
     ndjson_path: Path,
-    rows: Iterable[dict[str, Any]],
+    rows: Iterable[Row],
     allow_nan: bool,
 ) -> int:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,8 +222,14 @@ def write_outputs(
         csv_writer.writeheader()
 
         for row in rows:
-            csv_writer.writerow(row)
-            ndjson_handle.write(
+            csv_row: dict[FieldName, str | float] = {
+                "id": row["id"],
+                "timestamp": row["timestamp"],
+                "value": row["value"],
+                "tag": row["tag"],
+            }
+            csv_writer.writerow(csv_row)
+            _ = ndjson_handle.write(
                 json.dumps(
                     row,
                     ensure_ascii=False,
@@ -200,7 +237,7 @@ def write_outputs(
                     separators=(",", ":"),
                 )
             )
-            ndjson_handle.write("\n")
+            _ = ndjson_handle.write("\n")
             count += 1
 
     return count
@@ -222,7 +259,7 @@ def main() -> None:
         base = base.replace(tzinfo=timezone.utc)
 
     rng = random.Random(args.seed)
-    rows: Iterable[dict[str, Any]] = generated_rows(rng, base, args.rows)
+    rows: Iterable[Row] = generated_rows(rng, base, args.rows)
     if args.dirty:
         rows = itertools.chain(edge_rows(args.nonstandard_json_floats), rows)
 
