@@ -28,4 +28,8 @@ pub struct Args {
     /// Number of clean records to collect before flushing to SQLite.
     #[arg(long, default_value_t = 1000)]
     pub batch_size: usize,
+
+    /// Optional JSON-lines file for failed and filtered input records.
+    #[arg(long)]
+    pub log_file: Option<PathBuf>,
 }

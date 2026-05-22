@@ -1,13 +1,32 @@
 use anyhow::{Context, Result, bail};
 use rusqlite::{Connection, Error as SqliteError, OpenFlags, params};
 
-use crate::model::CleanRecord;
+use crate::model::{CleanRecord, PreparedRecord, RecordContext};
 
 /// Insert outcome for one batch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BatchInsertResult {
+    /// Number of rows inserted successfully.
     pub inserted: usize,
+
+    /// Number of expected row-level database failures.
     pub failed: usize,
+
+    /// Database failures with source context retained for structured logging.
+    pub failures: Vec<DatabaseRowFailure>,
+}
+
+/// Row-level database failure captured for structured logging.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DatabaseRowFailure {
+    /// Original source context for the failed row.
+    pub context: RecordContext,
+
+    /// Cleaned row that SQLite rejected.
+    pub record: CleanRecord,
+
+    /// Database error message, usually a constraint failure.
+    pub reason: String,
 }
 
 /// Open the existing SQLite database used by the CLI run.
@@ -71,7 +90,7 @@ fn validate_metrics_table(connection: &Connection) -> Result<()> {
 /// counted as failed rows. Operational database errors are returned to the CLI.
 pub fn insert_batch(
     connection: &mut Connection,
-    records: &[CleanRecord],
+    records: &[PreparedRecord],
 ) -> Result<BatchInsertResult> {
     let transaction = connection
         .transaction()
@@ -84,23 +103,34 @@ pub fn insert_batch(
             )
             .context("failed to prepare metrics insert")?;
         let mut inserted = 0;
-        let mut failed = 0;
+        let mut failures = Vec::new();
 
         for record in records {
+            let clean = &record.record;
             match statement.execute(params![
-                record.id,
-                record.timestamp,
-                record.value,
-                record.tag,
-                i64::from(record.positive),
+                clean.id,
+                clean.timestamp,
+                clean.value,
+                clean.tag,
+                i64::from(clean.positive),
             ]) {
                 Ok(_) => inserted += 1,
-                Err(error) if is_row_constraint_failure(&error) => failed += 1,
+                Err(error) if is_row_constraint_failure(&error) => {
+                    failures.push(DatabaseRowFailure {
+                        context: record.context.clone(),
+                        record: clean.clone(),
+                        reason: error.to_string(),
+                    });
+                }
                 Err(error) => return Err(error).context("failed to insert metrics row"),
             }
         }
 
-        BatchInsertResult { inserted, failed }
+        BatchInsertResult {
+            inserted,
+            failed: failures.len(),
+            failures,
+        }
     };
 
     transaction
@@ -117,6 +147,7 @@ fn is_row_constraint_failure(error: &SqliteError) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
 
     fn create_metrics_table(connection: &Connection) {
         connection
@@ -131,6 +162,17 @@ mod tests {
                 [],
             )
             .unwrap();
+    }
+
+    fn prepared(row_number: usize, record: CleanRecord) -> PreparedRecord {
+        PreparedRecord {
+            context: RecordContext {
+                row_number,
+                format: "csv",
+                raw: Value::Array(vec![Value::String(record.id.clone())]),
+            },
+            record,
+        }
     }
 
     #[test]
@@ -162,13 +204,16 @@ mod tests {
     fn inserts_clean_records() {
         let mut connection = Connection::open_in_memory().unwrap();
         create_metrics_table(&connection);
-        let records = vec![CleanRecord {
-            id: "event-1".to_string(),
-            timestamp: 1_778_502_600,
-            value: 42.5,
-            tag: "prod".to_string(),
-            positive: true,
-        }];
+        let records = vec![prepared(
+            1,
+            CleanRecord {
+                id: "event-1".to_string(),
+                timestamp: 1_778_502_600,
+                value: 42.5,
+                tag: "prod".to_string(),
+                positive: true,
+            },
+        )];
 
         let result = insert_batch(&mut connection, &records).unwrap();
         let count: i64 = connection
@@ -179,7 +224,8 @@ mod tests {
             result,
             BatchInsertResult {
                 inserted: 1,
-                failed: 0
+                failed: 0,
+                failures: Vec::new(),
             }
         );
         assert_eq!(count, 1);
@@ -190,27 +236,36 @@ mod tests {
         let mut connection = Connection::open_in_memory().unwrap();
         create_metrics_table(&connection);
         let records = vec![
-            CleanRecord {
-                id: "event-1".to_string(),
-                timestamp: 1_778_502_600,
-                value: 42.5,
-                tag: "prod".to_string(),
-                positive: true,
-            },
-            CleanRecord {
-                id: "event-1".to_string(),
-                timestamp: 1_778_502_601,
-                value: -1.0,
-                tag: "prod".to_string(),
-                positive: false,
-            },
-            CleanRecord {
-                id: "event-2".to_string(),
-                timestamp: 1_778_502_602,
-                value: -1.0,
-                tag: "prod".to_string(),
-                positive: false,
-            },
+            prepared(
+                1,
+                CleanRecord {
+                    id: "event-1".to_string(),
+                    timestamp: 1_778_502_600,
+                    value: 42.5,
+                    tag: "prod".to_string(),
+                    positive: true,
+                },
+            ),
+            prepared(
+                2,
+                CleanRecord {
+                    id: "event-1".to_string(),
+                    timestamp: 1_778_502_601,
+                    value: -1.0,
+                    tag: "prod".to_string(),
+                    positive: false,
+                },
+            ),
+            prepared(
+                3,
+                CleanRecord {
+                    id: "event-2".to_string(),
+                    timestamp: 1_778_502_602,
+                    value: -1.0,
+                    tag: "prod".to_string(),
+                    positive: false,
+                },
+            ),
         ];
 
         let result = insert_batch(&mut connection, &records).unwrap();
@@ -218,13 +273,11 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM metrics", [], |row| row.get(0))
             .unwrap();
 
-        assert_eq!(
-            result,
-            BatchInsertResult {
-                inserted: 2,
-                failed: 1
-            }
-        );
+        assert_eq!(result.inserted, 2);
+        assert_eq!(result.failed, 1);
+        assert_eq!(result.failures.len(), 1);
+        assert_eq!(result.failures[0].record.id, "event-1");
+        assert_eq!(result.failures[0].context.row_number, 2);
         assert_eq!(count, 2);
     }
 }

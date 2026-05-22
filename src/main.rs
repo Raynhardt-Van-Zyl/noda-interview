@@ -1,89 +1,13 @@
-//! Streaming CSV/NDJSON to SQLite ETL.
-//!
-//! Author: Raynhardt van Zyl
-
-mod cli;
-mod db;
-mod input;
-mod metrics;
-mod model;
-mod transform;
-
-use anyhow::{Result, bail};
+use anyhow::Result;
 use clap::Parser;
-
-use crate::{
-    cli::Args,
-    db::{insert_batch, open_connection},
-    input::read_records,
-    metrics::RunMetrics,
-    model::CleanRecord,
-    transform::{TransformResult, transform_record},
-};
+use noda_interview::{EtlConfig, cli::Args, run_etl};
 
 fn main() -> Result<()> {
     let args = Args::parse();
-
-    if args.batch_size == 0 {
-        bail!("--batch-size must be greater than 0");
-    }
-
-    let mut connection = open_connection(&args.db)?;
-    let mut metrics = RunMetrics::start();
-    let mut batch = Vec::with_capacity(args.batch_size);
-
-    // Count every input row, batch valid rows, and keep going after row-level
-    // parse or validation failures.
-    read_records(&args.input, args.format, |record| {
-        metrics.total_records += 1;
-        let record = match record {
-            Ok(record) => record,
-            Err(_) => {
-                metrics.failed_rows += 1;
-                return Ok(());
-            }
-        };
-
-        match transform_record(record) {
-            Ok(TransformResult::Clean(record)) => {
-                batch.push(record);
-
-                if batch.len() >= args.batch_size {
-                    flush_batch(&mut connection, &mut batch, &mut metrics)?;
-                }
-            }
-            Ok(TransformResult::FilteredEmptyTag) => {
-                metrics.filtered_empty_tags += 1;
-            }
-            Err(_) => {
-                metrics.failed_rows += 1;
-            }
-        }
-
-        Ok(())
-    })?;
-
-    flush_batch(&mut connection, &mut batch, &mut metrics)?;
+    let config = EtlConfig::from(&args);
+    let metrics = run_etl(&config)?;
 
     println!("{}", metrics.summary());
-
-    Ok(())
-}
-
-fn flush_batch(
-    connection: &mut rusqlite::Connection,
-    batch: &mut Vec<CleanRecord>,
-    metrics: &mut RunMetrics,
-) -> Result<()> {
-    if batch.is_empty() {
-        return Ok(());
-    }
-
-    // A batch uses one transaction and one prepared statement.
-    let result = insert_batch(connection, batch)?;
-    metrics.successful_rows += result.inserted;
-    metrics.failed_rows += result.failed;
-    batch.clear();
 
     Ok(())
 }

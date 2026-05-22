@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 #[derive(Debug)]
 pub struct RunMetrics {
     started_at: Instant,
+    completed_in: Option<Duration>,
     pub total_records: usize,
     pub successful_rows: usize,
     pub failed_rows: usize,
@@ -15,6 +16,7 @@ impl RunMetrics {
     pub fn start() -> Self {
         Self {
             started_at: Instant::now(),
+            completed_in: None,
             total_records: 0,
             successful_rows: 0,
             failed_rows: 0,
@@ -24,7 +26,15 @@ impl RunMetrics {
 
     /// Wall-clock time since the run started.
     pub fn elapsed(&self) -> Duration {
-        self.started_at.elapsed()
+        self.completed_in
+            .unwrap_or_else(|| self.started_at.elapsed())
+    }
+
+    /// Freeze the elapsed duration at the end of a run.
+    pub fn finish(&mut self) {
+        if self.completed_in.is_none() {
+            self.completed_in = Some(self.started_at.elapsed());
+        }
     }
 
     /// Throughput based on all raw records read from input.
@@ -69,5 +79,16 @@ mod tests {
         assert!(summary.contains("Successful rows written: 1"));
         assert!(summary.contains("Failed rows: 1"));
         assert!(summary.contains("Filtered empty tags: 1"));
+    }
+
+    #[test]
+    fn finished_metrics_keep_stable_elapsed_time() {
+        let mut metrics = RunMetrics::start();
+        metrics.finish();
+        let elapsed = metrics.elapsed();
+
+        std::thread::sleep(Duration::from_millis(5));
+
+        assert_eq!(metrics.elapsed(), elapsed);
     }
 }
