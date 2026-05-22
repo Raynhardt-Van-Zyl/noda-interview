@@ -30,7 +30,8 @@ The loader separates fatal run errors from row-level errors:
 | --- | --- |
 | Input file cannot be opened | Fatal error |
 | SQLite file missing | Fatal error |
-| `metrics` table missing or wrong schema | Fatal error |
+| `metrics` table missing required columns | Fatal error |
+| Extra `NOT NULL` SQLite column without a default | Fatal error |
 | Malformed CSV/NDJSON row | Failed row, logged when enabled |
 | Invalid timestamp | Failed row, logged when enabled |
 | Non-finite numeric value | Failed row, logged when enabled |

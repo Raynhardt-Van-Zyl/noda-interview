@@ -14,6 +14,14 @@ CREATE TABLE metrics (
 );
 ```
 
+Validation is order-agnostic. The loader requires the five columns it writes to
+have compatible names, types, nullability, and primary-key settings, but the
+table may contain additional columns.
+
+Extra columns are accepted when they are nullable or have a default value. Extra
+`NOT NULL` columns without defaults are rejected because the loader does not
+provide values for them and every insert would fail.
+
 Clean records are inserted with:
 
 ```sql

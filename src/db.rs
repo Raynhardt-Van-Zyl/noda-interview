@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use anyhow::{Context, Result, bail};
 use rusqlite::{Connection, Error as SqliteError, OpenFlags, params};
 
@@ -46,42 +48,105 @@ fn validate_metrics_table(connection: &Connection) -> Result<()> {
         .context("failed to inspect metrics table")?;
     let columns = statement
         .query_map([], |row| {
+            let name = row.get::<_, String>(1)?;
             Ok((
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?.to_uppercase(),
-                row.get::<_, i64>(3)?,
-                row.get::<_, i64>(5)?,
+                name.clone(),
+                TableColumn {
+                    name,
+                    column_type: row.get::<_, String>(2)?.to_uppercase(),
+                    not_null: row.get::<_, i64>(3)? != 0,
+                    has_default: row.get::<_, Option<String>>(4)?.is_some(),
+                    primary_key: row.get::<_, i64>(5)? != 0,
+                },
             ))
         })
         .context("failed to read metrics table schema")?
-        .collect::<std::result::Result<Vec<_>, _>>()
+        .collect::<std::result::Result<HashMap<_, _>, _>>()
         .context("failed to collect metrics table schema")?;
 
-    let expected = [
-        ("id", "TEXT", 0, 1),
-        ("timestamp", "INTEGER", 1, 0),
-        ("value", "REAL", 1, 0),
-        ("tag", "TEXT", 1, 0),
-        ("positive", "INTEGER", 1, 0),
-    ];
+    let required = HashMap::from([
+        (
+            "id".to_string(),
+            RequiredColumn {
+                column_type: "TEXT",
+                not_null: false,
+                primary_key: true,
+            },
+        ),
+        (
+            "timestamp".to_string(),
+            RequiredColumn {
+                column_type: "INTEGER",
+                not_null: true,
+                primary_key: false,
+            },
+        ),
+        (
+            "value".to_string(),
+            RequiredColumn {
+                column_type: "REAL",
+                not_null: true,
+                primary_key: false,
+            },
+        ),
+        (
+            "tag".to_string(),
+            RequiredColumn {
+                column_type: "TEXT",
+                not_null: true,
+                primary_key: false,
+            },
+        ),
+        (
+            "positive".to_string(),
+            RequiredColumn {
+                column_type: "INTEGER",
+                not_null: true,
+                primary_key: false,
+            },
+        ),
+    ]);
+    let required_names = required.keys().cloned().collect::<HashSet<_>>();
 
-    if columns.len() != expected.len() {
-        bail!("metrics table does not match expected schema");
+    for (name, expected) in &required {
+        let Some(actual) = columns.get(name) else {
+            bail!("metrics table is missing required column {name}");
+        };
+
+        if actual.column_type != expected.column_type
+            || actual.not_null != expected.not_null
+            || actual.primary_key != expected.primary_key
+        {
+            bail!("metrics table column {name} does not match expected schema");
+        }
     }
 
-    for (actual, expected) in columns.iter().zip(expected) {
-        let (name, column_type, not_null, primary_key) = actual;
-        let (expected_name, expected_type, expected_not_null, expected_primary_key) = expected;
-        if name != expected_name
-            || column_type != expected_type
-            || *not_null != expected_not_null
-            || *primary_key != expected_primary_key
-        {
-            bail!("metrics table does not match expected schema");
+    for column in columns.values() {
+        if !required_names.contains(&column.name) && column.not_null && !column.has_default {
+            bail!(
+                "metrics table has required extra column {} without a default value",
+                column.name
+            );
         }
     }
 
     Ok(())
+}
+
+#[derive(Debug)]
+struct TableColumn {
+    name: String,
+    column_type: String,
+    not_null: bool,
+    has_default: bool,
+    primary_key: bool,
+}
+
+#[derive(Debug)]
+struct RequiredColumn {
+    column_type: &'static str,
+    not_null: bool,
+    primary_key: bool,
 }
 
 /// Insert one batch in a transaction.
@@ -184,6 +249,46 @@ mod tests {
     }
 
     #[test]
+    fn accepts_metrics_columns_in_any_order() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute(
+                "CREATE TABLE metrics (
+                    tag TEXT NOT NULL,
+                    value REAL NOT NULL,
+                    id TEXT PRIMARY KEY,
+                    positive INTEGER NOT NULL,
+                    timestamp INTEGER NOT NULL
+                )",
+                [],
+            )
+            .unwrap();
+
+        validate_metrics_table(&connection).unwrap();
+    }
+
+    #[test]
+    fn accepts_extra_nullable_or_defaulted_columns() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute(
+                "CREATE TABLE metrics (
+                    id TEXT PRIMARY KEY,
+                    timestamp INTEGER NOT NULL,
+                    value REAL NOT NULL,
+                    tag TEXT NOT NULL,
+                    positive INTEGER NOT NULL,
+                    source TEXT,
+                    received_at INTEGER NOT NULL DEFAULT 0
+                )",
+                [],
+            )
+            .unwrap();
+
+        validate_metrics_table(&connection).unwrap();
+    }
+
+    #[test]
     fn rejects_missing_metrics_table() {
         let connection = Connection::open_in_memory().unwrap();
 
@@ -195,6 +300,26 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         connection
             .execute("CREATE TABLE metrics (id TEXT PRIMARY KEY)", [])
+            .unwrap();
+
+        assert!(validate_metrics_table(&connection).is_err());
+    }
+
+    #[test]
+    fn rejects_extra_required_column_without_default() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute(
+                "CREATE TABLE metrics (
+                    id TEXT PRIMARY KEY,
+                    timestamp INTEGER NOT NULL,
+                    value REAL NOT NULL,
+                    tag TEXT NOT NULL,
+                    positive INTEGER NOT NULL,
+                    tenant_id TEXT NOT NULL
+                )",
+                [],
+            )
             .unwrap();
 
         assert!(validate_metrics_table(&connection).is_err());
