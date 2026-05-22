@@ -1,3 +1,8 @@
+//! Validation and normalization for raw input records.
+//!
+//! This module turns [`RawRecord`] values into [`CleanRecord`] values ready for
+//! SQLite insertion, or reports an expected row-level filter/failure.
+
 use anyhow::{Context, Result, bail};
 use chrono::DateTime;
 
@@ -6,11 +11,51 @@ use crate::model::{CleanRecord, RawRecord};
 /// Result of applying validation and normalization to one raw record.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TransformResult {
+    /// The row is valid and ready to insert.
     Clean(CleanRecord),
+
+    /// The row was valid enough to parse but skipped because `tag.trim()` was empty.
     FilteredEmptyTag,
 }
 
 /// Validate and normalize one raw input record.
+///
+/// Rules:
+///
+/// - `value` must be finite.
+/// - `timestamp` must parse as RFC 3339 and is converted to Unix epoch seconds.
+/// - `tag` is trimmed and lowercased.
+/// - empty normalized tags return [`TransformResult::FilteredEmptyTag`].
+/// - `positive` is true when `value > 0.0`.
+///
+/// # Example
+///
+/// ```
+/// use noda_interview::{
+///     model::{CleanRecord, RawRecord},
+///     transform::{TransformResult, transform_record},
+/// };
+///
+/// let raw = RawRecord {
+///     id: "event-1".to_string(),
+///     timestamp: "2026-05-11T12:30:00Z".to_string(),
+///     value: 42.5,
+///     tag: " Prod ".to_string(),
+/// };
+///
+/// let result = transform_record(raw)?;
+/// assert_eq!(
+///     result,
+///     TransformResult::Clean(CleanRecord {
+///         id: "event-1".to_string(),
+///         timestamp: 1_778_502_600,
+///         value: 42.5,
+///         tag: "prod".to_string(),
+///         positive: true,
+///     })
+/// );
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 pub fn transform_record(record: RawRecord) -> Result<TransformResult> {
     if !record.value.is_finite() {
         bail!("value must be finite for id {}", record.id);

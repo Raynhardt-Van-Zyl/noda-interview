@@ -1,3 +1,8 @@
+//! Command-line argument types used by the `noda-interview` binary.
+//!
+//! Library callers normally use [`crate::EtlConfig`] directly. This module is
+//! public because [`InputFormat`] is shared by the CLI and library API.
+
 use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
@@ -5,7 +10,10 @@ use clap::{Parser, ValueEnum};
 /// Supported streaming input formats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum InputFormat {
+    /// Comma-separated values with the header `id,timestamp,value,tag`.
     Csv,
+
+    /// Newline-delimited JSON with one raw record object per line.
     Ndjson,
 }
 

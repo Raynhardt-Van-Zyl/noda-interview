@@ -1,3 +1,13 @@
+//! Streaming readers for CSV and NDJSON inputs.
+//!
+//! The input layer is responsible for preserving source context. Every
+//! successfully parsed row is returned as an [`InputRecord`], and every
+//! row-level parse failure is returned as an [`InputRecordFailure`] when enough
+//! source information is available to keep processing.
+//!
+//! This module does not validate timestamps, values, or tags. That work belongs
+//! to [`crate::transform`].
+
 use std::{
     fs::File,
     io::{BufRead, BufReader},
@@ -53,6 +63,9 @@ pub fn read_records(
 }
 
 /// Read CSV records with serde deserialization, one record at a time.
+///
+/// CSV input must include the header `id,timestamp,value,tag`. The callback is
+/// invoked once per physical data row, excluding the header.
 pub fn read_csv_records(
     path: impl AsRef<Path>,
     mut handle_record: impl FnMut(RecordReadResult) -> Result<()>,
@@ -112,6 +125,10 @@ pub fn read_csv_records(
 }
 
 /// Read newline-delimited JSON records, one line at a time.
+///
+/// NDJSON input must contain one JSON object per line. The raw line text is
+/// retained in [`RecordContext`] so parse failures
+/// can be logged with enough context for debugging.
 pub fn read_ndjson_records(
     path: impl AsRef<Path>,
     mut handle_record: impl FnMut(RecordReadResult) -> Result<()>,

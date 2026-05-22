@@ -1,3 +1,5 @@
+//! Data contracts shared across parsing, transformation, insertion, and logging.
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

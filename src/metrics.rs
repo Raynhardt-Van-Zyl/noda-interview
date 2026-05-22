@@ -1,13 +1,32 @@
+//! Runtime counters returned by [`crate::run_etl`].
+//!
+//! Metrics are intentionally aggregate-only. Use [`crate::event_log`] when a
+//! caller needs row-level failure details.
+
 use std::time::{Duration, Instant};
 
-/// Runtime counters collected during one CLI run.
+/// Runtime counters collected during one ETL run.
+///
+/// `RunMetrics` is returned by [`crate::run_etl`] after the run has completed.
+/// At that point the elapsed duration is frozen, so later calls to
+/// [`elapsed`](Self::elapsed), [`rows_per_second`](Self::rows_per_second), or
+/// [`summary`](Self::summary) describe the completed ETL run rather than the
+/// wall-clock time since the struct was created.
 #[derive(Debug)]
 pub struct RunMetrics {
     started_at: Instant,
     completed_in: Option<Duration>,
+
+    /// Number of physical input records read.
     pub total_records: usize,
+
+    /// Number of rows inserted into SQLite.
     pub successful_rows: usize,
+
+    /// Number of malformed, invalid, or database-rejected rows.
     pub failed_rows: usize,
+
+    /// Number of otherwise valid rows skipped because their tag normalized to empty.
     pub filtered_empty_tags: usize,
 }
 

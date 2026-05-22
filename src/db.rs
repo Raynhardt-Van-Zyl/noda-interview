@@ -1,3 +1,10 @@
+//! SQLite connection, schema validation, and batch insertion.
+//!
+//! The loader expects the database and `metrics` table to exist before an ETL
+//! run starts. Schema validation is intentionally compatibility-oriented:
+//! required columns are checked by name, column order is ignored, and extra
+//! columns are allowed when they are nullable or have defaults.
+
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Result, bail};
@@ -31,7 +38,10 @@ pub struct DatabaseRowFailure {
     pub reason: String,
 }
 
-/// Open the existing SQLite database used by the CLI run.
+/// Open the existing SQLite database used by an ETL run.
+///
+/// The connection is opened read/write without creating missing files. The
+/// `metrics` table is validated before the connection is returned.
 pub fn open_connection(path: impl AsRef<std::path::Path>) -> Result<Connection> {
     let path = path.as_ref();
     let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
@@ -153,6 +163,9 @@ struct RequiredColumn {
 ///
 /// Expected row-level constraint failures, such as duplicate primary keys, are
 /// counted as failed rows. Operational database errors are returned to the CLI.
+///
+/// The function returns [`BatchInsertResult::failures`] with the original
+/// [`RecordContext`] retained for each row-level database failure.
 pub fn insert_batch(
     connection: &mut Connection,
     records: &[PreparedRecord],

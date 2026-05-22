@@ -1,3 +1,10 @@
+//! Structured JSON Lines diagnostics for row-level ETL outcomes.
+//!
+//! The logger is optional. When no log file is configured, calls become no-ops
+//! so the main pipeline does not need a separate logged/unlogged code path.
+//! When enabled, every failed or filtered row is written as one compact JSON
+//! object.
+
 use std::{
     fs::File,
     io::{BufWriter, Write},
@@ -16,6 +23,29 @@ use crate::{
 };
 
 /// Optional JSON-lines writer for rejected or skipped records.
+///
+/// Event shape is stable enough for operational tooling:
+///
+/// ```json
+/// {
+///   "event": "failed_row",
+///   "stage": "database",
+///   "reason": "UNIQUE constraint failed: metrics.id",
+///   "context": {
+///     "input_path": "events.csv",
+///     "format": "csv",
+///     "row_number": 2,
+///     "raw": ["dup", "2026-05-11T00:00:01Z", "2.0", "prod"]
+///   },
+///   "entry": {
+///     "id": "dup",
+///     "timestamp": 1778457601,
+///     "value": 2.0,
+///     "tag": "prod",
+///     "positive": true
+///   }
+/// }
+/// ```
 pub struct EventLog {
     input_path: PathBuf,
     input_format: InputFormat,

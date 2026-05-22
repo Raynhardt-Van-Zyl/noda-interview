@@ -1,16 +1,69 @@
-//! Streaming CSV/NDJSON to SQLite ETL.
+//! Streaming CSV/NDJSON to SQLite ETL for embedding in Rust applications.
 //!
-//! This crate provides the reusable core behind the `noda-interview` command
-//! line tool. It streams CSV or NDJSON records, validates and normalizes each
-//! row, writes clean records to an existing SQLite `metrics` table, and can emit
-//! structured JSONL diagnostics for failed or filtered rows.
+//! `noda_interview` provides the reusable core behind the `noda-interview`
+//! command line tool. It streams CSV or NDJSON records, validates and normalizes
+//! each row, writes clean records to an existing SQLite `metrics` table, and can
+//! emit structured JSONL diagnostics for failed or filtered rows.
 //!
-//! The primary API for embedding the loader in another Rust codebase is
-//! [`run_etl`]. Lower-level modules are public so callers can reuse individual
-//! pieces, such as [`input`] readers, [`transform`] validation, or [`db`] batch
-//! insertion.
+//! # Primary API
+//!
+//! Most applications should construct an [`EtlConfig`] and pass it to
+//! [`run_etl`]:
+//!
+//! ```no_run
+//! use noda_interview::{EtlConfig, cli::InputFormat, run_etl};
+//!
+//! # fn main() -> anyhow::Result<()> {
+//! let config = EtlConfig::new("events.ndjson", InputFormat::Ndjson, "metrics.sqlite")
+//!     .with_batch_size(1000)
+//!     .with_log_file("events.jsonl");
+//!
+//! let metrics = run_etl(&config)?;
+//! println!("{}", metrics.summary());
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! The SQLite database file and `metrics` table must already exist. The table
+//! must contain the columns written by the loader:
+//!
+//! ```sql
+//! CREATE TABLE metrics (
+//!   id TEXT PRIMARY KEY,
+//!   timestamp INTEGER NOT NULL,
+//!   value REAL NOT NULL,
+//!   tag TEXT NOT NULL,
+//!   positive INTEGER NOT NULL
+//! );
+//! ```
+//!
+//! Additional SQLite columns are allowed when they are nullable or have a
+//! default value.
+//!
+//! # Row-Level Failures
+//!
+//! Expected data-quality failures do not abort the run. Malformed input rows,
+//! invalid timestamps, non-finite values, empty tags, and duplicate primary keys
+//! are counted in [`metrics::RunMetrics`]. When `EtlConfig::log_file` is set,
+//! each failed or filtered row is also written as one JSON Lines event with the
+//! source row context.
+//!
+//! Fatal setup and operational problems still return an error from [`run_etl`].
+//! Examples include a missing input file, missing SQLite database, incompatible
+//! required schema, or a failure to flush the structured log.
+//!
+//! # Lower-Level Modules
+//!
+//! The top-level API is intentionally small, but lower-level modules are public
+//! for integration tests and advanced embedding:
+//!
+//! - [`input`] streams CSV/NDJSON rows while preserving source context.
+//! - [`transform`] validates and normalizes [`model::RawRecord`] values.
+//! - [`db`] validates the SQLite table and inserts [`model::PreparedRecord`]
+//!   batches.
+//! - [`event_log`] writes structured diagnostics for rejected or skipped rows.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 
@@ -36,21 +89,48 @@ use crate::{
 ///
 /// This type is intentionally independent from Clap so library callers can
 /// construct it directly without depending on CLI parsing.
+///
+/// # Defaults
+///
+/// [`EtlConfig::new`] uses a batch size of `1000` and disables structured event
+/// logging. Use [`with_batch_size`](Self::with_batch_size) and
+/// [`with_log_file`](Self::with_log_file) to override those settings.
+///
+/// # Example
+///
+/// ```no_run
+/// use noda_interview::{EtlConfig, cli::InputFormat};
+///
+/// let config = EtlConfig::new("input.csv", InputFormat::Csv, "metrics.sqlite")
+///     .with_batch_size(500)
+///     .with_log_file("events.jsonl");
+///
+/// assert_eq!(config.batch_size, 500);
+/// ```
 #[derive(Debug, Clone)]
 pub struct EtlConfig {
     /// CSV or NDJSON file to read.
+    ///
+    /// The file is streamed; it is not loaded fully into memory.
     pub input: PathBuf,
 
     /// Parser to use for the input file.
     pub format: InputFormat,
 
     /// Existing SQLite database containing the target `metrics` table.
+    ///
+    /// Missing database files are treated as fatal setup errors.
     pub db: PathBuf,
 
     /// Number of clean records to collect before flushing to SQLite.
+    ///
+    /// Must be greater than zero.
     pub batch_size: usize,
 
     /// Optional JSON-lines file for failed and filtered rows.
+    ///
+    /// When set, parse, transform, filter, and database row failures are logged
+    /// as structured events.
     pub log_file: Option<PathBuf>,
 }
 
@@ -86,6 +166,36 @@ impl EtlConfig {
 /// tags, non-finite values, or duplicate primary keys, are counted and logged
 /// when `config.log_file` is set. Fatal setup and operational errors are
 /// returned to the caller.
+///
+/// The returned [`RunMetrics`] has a frozen elapsed duration. Calling
+/// [`RunMetrics::summary`] later will not include time spent after the ETL run
+/// completed.
+///
+/// # Errors
+///
+/// Returns an error when setup or operational work fails, including:
+///
+/// - `batch_size == 0`
+/// - input file open failures
+/// - missing SQLite database file
+/// - incompatible required `metrics` columns
+/// - extra `NOT NULL` SQLite columns without defaults
+/// - transaction or commit failures
+/// - structured log write or flush failures
+///
+/// # Example
+///
+/// ```no_run
+/// use noda_interview::{EtlConfig, cli::InputFormat, run_etl};
+///
+/// # fn main() -> anyhow::Result<()> {
+/// let config = EtlConfig::new("events.csv", InputFormat::Csv, "metrics.sqlite");
+/// let metrics = run_etl(&config)?;
+///
+/// println!("inserted {} rows", metrics.successful_rows);
+/// # Ok(())
+/// # }
+/// ```
 pub fn run_etl(config: &EtlConfig) -> Result<RunMetrics> {
     if config.batch_size == 0 {
         bail!("--batch-size must be greater than 0");
@@ -173,12 +283,4 @@ impl From<&crate::cli::Args> for EtlConfig {
             log_file: args.log_file.clone(),
         }
     }
-}
-
-/// Return `true` when a path points to an existing regular file.
-///
-/// This helper is used by downstream examples and keeps doctests simple for
-/// codebases that want to validate fixture paths before calling [`run_etl`].
-pub fn is_existing_file(path: impl AsRef<Path>) -> bool {
-    path.as_ref().is_file()
 }
